@@ -1,0 +1,426 @@
+* {
+    padding : 0;
+    margin  : 0;
+    border  : 0;
+    
+    font-family: sans-serif;
+}
+
+html {
+    width  : 100%;
+    height : 100%;
+}
+
+body {
+    position : fixed;
+    top      : 0px;
+    left     : 0px;
+    right    : 0px;
+    bottom   : 0px;
+    overflow : hidden;
+}
+
+#message {
+    position                : absolute;
+    left                    : 50%;
+    bottom                  : -70px;
+    transition              : bottom 0.2s ease-in-out;
+    border-top-left-radius  : 10px;
+    border-top-right-radius : 10px;
+    background-color        : rgba(0, 0, 0, 0.7);
+    transform               : translateX(-50%);
+    font-size               : 24px;
+    height                  : 60px;
+    line-height             : 60px;
+    max-width               : 90%;
+    min-width               : 50%;
+    text-align              : center;
+    white-space             : nowrap;
+    overflow                : hidden;
+    text-overflow           : ellipsis;
+    z-index                 : 1000;
+    color                   : orange;
+    box-shadow              : 0px 0px 4px 4px rgba(0,0,0,0.7);
+    padding-left            : 10px;
+    padding-right           : 10px;
+}
+
+#message.open {
+    bottom    : 0px;
+    transition: none;
+}
+
+
+.layer {
+    position        : fixed;
+    top             : 0px;
+    left            : 0px;
+    right           : 0px;
+    bottom          : 0px;
+
+    overflow-x      : hidden;
+    overflow-y      : hidden;
+    
+    color           : #ddd;
+    background-color: #222;
+    scroll-behavior : auto;
+}
+
+.layer#viewer {
+    overflow-x      : scroll;
+    overflow-y      : scroll;
+    background-color: #000;
+    cursor          :none;
+}
+
+.layer#stacks {
+    padding-top   : 60px;
+    padding-bottom: 20px;
+    overflow-y    : scroll;
+}
+
+.layer#books {
+    padding-top   : 60px;
+    padding-bottom: 20px;
+    overflow-y    : scroll;
+}
+
+.layer#settings {
+    padding-top   : 80px;
+    padding-bottom: 20px;
+    overflow-y    : scroll;
+}
+
+.layer>.title {
+    position    : absolute;
+    top         : 0px;
+    left        : 80px;
+    height      : 60px;
+    line-height : 60px;
+    font-size   : 32px;
+    color       : orange;
+    text-shadow : 2px 2px 4px #000;
+}
+
+.layer#controls {
+    z-index         : 999;
+    background-color: transparent;
+    pointer-events  : none;
+}
+
+.book {
+    display       : inline-block;
+    position      : relative;
+    vertical-align: top;
+    cursor        : pointer;
+    text-align    : center;
+}
+.book>.title {
+    position      : relative;
+    display       : block;
+    height        : 10%;
+    text-align    : center;
+    vertical-align: bottom;
+    text-shadow   : 2px 2px 4px #000;
+    margin-top    : 10%;
+    margin-bottom : 3%;
+}
+.book>.cover {
+    position        : relative;
+    display         : inline-block;
+    width           : 90%;
+    border          : 1px solid #ddd;
+    background-color: #222;
+}
+.book>.cover>img {
+    width : 100%;
+}
+
+.stack {
+    display       : inline-block;
+    position      : relative;
+    vertical-align: top;
+    cursor        : pointer;
+}
+.stack>.cover {
+    position        : absolute;
+    height          : 65%;
+    border          : 1px solid #ddd;
+    background-color: #222;
+    
+    top             : 50%;
+    left            : 50%;
+}
+.stack>.cover>img {
+    width : 100%;
+    height: 100%;
+}
+.stack>.name {
+    position      : absolute;
+    left          : 0px;
+    bottom        : 0px;
+    width         : 90%;
+    text-align    : center;
+    vertical-align: bottom;
+    padding       : 0% 5% 0% 5%;
+    text-shadow   : 2px 2px 4px #000;
+    z-index       : 99;
+}
+
+
+#page {
+    position: relative;
+    
+    /* Default size */
+    width   : 100%;
+    height  : 100%;
+}
+#page>img {
+    position: absolute;
+    top     : 0px;
+    left    : 0px;
+    width   : 100%;
+    height  : 100%;
+    z-index : 2;
+}
+#page>#progress {
+    position : absolute;
+    display  : inline-block;
+    top      : 50%;
+    left     : 50%;
+    transform: translate(-50%,-50%);
+    z-index  : 1;
+    text-align: center;
+    height:120px;
+    width:120px;
+    font-size:32px;
+    line-height: 120px;
+    background-color: #333;
+    border-radius: 120px;
+    color: orange;
+    text-shadow: 2px 2px 4px #000;
+}
+
+.layer#viewer.fit {
+    overflow-x : hidden;
+    overflow-y : hidden;
+}
+.layer#viewer.fit>#page {
+    position  : absolute;
+    top       : 50%;
+    left      : 50%;
+    transform : translate(-50%,-50%);
+}
+
+.layer#viewer.scroll-down {
+    overflow-x: hidden;
+}
+.layer#viewer.scroll-right {
+    overflow-y: hidden;
+}
+
+.control {
+    position         : absolute;
+    width            : 60px;
+    height           : 60px;
+    font-size        : 20px;
+    line-height      : 60px;
+    text-align       : center;
+    background-color : #444;
+    box-shadow       : 0px 0px 4px 4px rgba(0,0,0,0.2);
+    color            : orange;
+    cursor           : pointer;
+    pointer-events   : auto;
+    transition       : opacity 0.3s linear;
+    opacity          : 0.8;
+    
+    -webkit-touch-callout : none;
+    -webkit-user-select   : none;
+    -khtml-user-select    : none;
+    -moz-user-select      : none;
+    -ms-user-select       : none;
+    user-select           : none;
+}
+
+.control.removed {
+    opacity        : 0;
+    pointer-events : none;
+}
+.control.hidden {
+    opacity: 0;
+}
+.control.hidden.hinted {
+    opacity: 0.8;
+    transition: none;
+}
+
+.control>svg {
+    position : absolute;
+    display  : block;
+    top      : 50%;
+    left     : 50%;
+    transform: translate(-50%, -50%);
+}
+.control#logo {
+    border-bottom-right-radius: 10px;
+    top                       : 0px;
+    left                      : 0px;
+}
+.control#logo>img {
+    width         : 42px;
+    height        : 42px;
+    vertical-align: top;
+    padding-top   : 8px;
+}
+.control#close {
+    border-bottom-right-radius: 10px;
+    top                       : 0px;
+    left                      : 0px;
+}
+.control#fscreen {
+    border-bottom-left-radius : 10px;
+    top                       : 0px;
+    right                     : 0px;
+}
+.control#settings {
+    border-bottom-left-radius : 10px;
+    border-bottom-right-radius: 10px;
+    top                       : 0px;
+    right                     : 80px;
+}
+.control#colup {
+    border-bottom-left-radius : 10px;
+    border-bottom-right-radius: 10px;
+    top                       : 0px;
+    right                     : 160px;
+}
+.control#coldown {
+    border-bottom-left-radius : 10px;
+    border-bottom-right-radius: 10px;
+    top                       : 0px;
+    right                     : 240px;
+}
+.control#prev {
+    border-top-right-radius   : 10px;
+    bottom                    : 0px;
+    left                      : 0px;
+    top                       : 80px;
+    height                    : auto;
+}
+.control#next {
+    border-top-left-radius    : 10px;
+    bottom                    : 0px;
+    right                     : 0px;
+    top                       : 80px;
+    height                    : auto;
+}
+.control#mode {
+    border-top-left-radius    : 10px;
+    border-top-right-radius   : 10px;
+    bottom                    : 0px;
+    left                      : 80px;
+    right                     : 80px;
+    width                     : auto;
+}
+
+
+.settings-group {
+    display          : block;
+    position         : relative;
+    width            : calc(100% - 40px);
+    margin-left      : 20px;
+    font-size: 16px;
+    color: orange;
+}
+
+.settings-group>.title {
+    width        : 100%;
+    height       : 32px;
+    line-height  : 32px;
+    text-shadow  : 2px 2px 4px #000;
+    font-size    : 24px;
+    border-bottom: 1px solid orange;
+}
+
+.settings-group>.body {
+    width    : 100%;
+    font-size: 16px;
+    padding  : 15px 0px 20px 0px;
+}
+
+.settings-group>.body>.help {
+    width    : 100%;
+}
+
+.settings-group>.body>.form {
+    position: relative;
+    width  : 100%;
+    padding: 15px 0px 0px 0px;
+}
+
+.settings-group>.body>.buttons {
+    width  : 100%;
+    padding: 15px 0px 0px 0px;
+    text-align: right;
+}
+
+.settings-group>.form {
+    position: relative;
+    width: 100%;
+}
+
+table.form {
+    width:100%;
+}
+
+td.form-label {
+    text-align: right;
+    white-space: nowrap;
+    padding-right: 5px;
+    width:30%;
+    padding-bottom:10px;
+}
+
+td.form-control {
+    padding-left:5px;
+    padding-bottom:10px;
+}
+
+select.settings,
+input.settings {
+    display         : block;
+    width           : calc(100% - 20px);
+    border-radius   : 5px;
+    height          : 32px;
+    font-size       : 16px;
+    line-height     : 32px;
+    padding         : 0px 10px 0px 10px;
+    background-color: #444;
+    color           : #ddd;
+    outline         : none;
+    box-sizing      : content-box;
+}
+
+select.settings:focus,
+input.settings:focus {
+    background-color: #555;
+}
+
+button.settings {
+    display         : inline-block;
+    height          : 32px;
+    line-height     : 32px;
+    font-size       : 16px;
+    background-color: #444;
+    color           : orange;
+    padding         : 0px 20px 0px 20px;
+    border-radius   : 5px;
+    cursor          : pointer;
+    box-shadow      : 0px 0px 4px 4px rgba(0,0,0,0.2);
+    outline         : none;
+}
+
+button.settings:hover {
+    background-color: #555;
+}
+

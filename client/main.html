@@ -1,0 +1,137 @@
+<head>
+	<title>Stacks</title>
+
+	<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+	<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+	<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+	<link rel="manifest" href="/site.webmanifest">
+	<link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
+	<meta name="msapplication-TileColor" content="#da532c">
+	<meta name="theme-color" content="#ffffff">
+
+	<meta name="viewport" content="user-scalable=no, width=device-width, initial-scale=1, maximum-scale=1">
+</head>
+
+<body>
+	{{> layers}}
+	<div id="message"></div>
+</body>
+
+<template name="layers">
+	<div class="layer" style="{{layerStyle 'controls'}}" id="controls">{{> controls}}</div>
+	<div class="layer" style="{{layerStyle 'settings'}}" id="settings">{{> settings}}</div>
+	<div class="layer" style="{{layerStyle 'books'}}"    id="books">{{> books}}</div>
+	<div class="layer" style="{{layerStyle 'stacks'}}"   id="stacks">{{> stacks}}</div>
+	<div class="layer" id="viewer">{{> viewer}}</div>
+</template>
+
+<template name="controls">
+	<div class="control {{controlClasses 'logo'}}"     id="logo"><img src="/stacks-logo.png"></div>
+	<div class="control {{controlClasses 'close'}}"    id="close">{{{icon 'cross' 'orange' '24px'}}}</div>
+	<div class="control {{controlClasses 'fscreen'}}"  id="fscreen">{{{icon 'enlarge' 'orange' '24px'}}}</div>
+	<div class="control {{controlClasses 'settings'}}" id="settings">{{{icon 'wrench' 'orange' '24px'}}}</div>
+	<div class="control {{controlClasses 'colup'}}"    id="colup">Col+</div>
+	<div class="control {{controlClasses 'coldown'}}"  id="coldown">Col-</div>
+	<div class="control {{controlClasses 'prev'}}"     id="prev">{{{icon 'arrow-left' 'orange' '24px'}}}</div>
+	<div class="control {{controlClasses 'next'}}"     id="next">{{{icon 'arrow-right' 'orange' '24px'}}}</div>
+	<div class="control {{controlClasses 'mode'}}"     id="mode">{{{icon 'rulers' 'orange' '24px'}}}</div>
+</template>
+
+<template name="stacks">
+
+	<div class="title">Stacks</div>
+	{{#each stacks}}<div class="stack" id="{{id}}" {{stackAttrs}}>
+		{{#each stackBooks id}}<div class="cover" {{coverAttrs}}>{{#unless noStackCover}}<img src="{{loadThumb _id}}">{{/unless}}</div>{{/each}}
+		<div class="name">{{name}}</div>
+	</div>{{/each}}
+
+</template>
+
+<template name="books">
+
+	<div class="title">{{title}}</div>
+	{{#each books}}<div class="book" id="{{id}}" {{bookAttrs}}><div class="title">{{order}}</div><div class="cover" {{coverAttrs}}><img src="{{loadThumb _id}}"></div></div>{{/each}}
+
+</template>
+
+<template name="viewer">
+
+	<div id="page">
+		<div id="progress"></div>
+	</div>
+
+</template>
+
+<template name="settings">
+
+	<div class="title">Settings</div>
+
+	<div class="settings-group">
+		
+		<div class="title">
+			Library management
+		</div>
+
+		<div class="body">
+		
+			<div class="help">
+				Specify the path to your comic library directory. Stacks will <i>never</i> write to your library and its subdirectories. Stacks will automatically pick up additions to your library. Stacks scans fully recursively, but it only evaluates filenames, not directory names. Redoing the initial scan will drop existing read/unread information and re-read the entire library immediately. If you keep unread books in a special sub-directory inside your library, specify its name. Books found there will be treated as unread when first found.
+			</div>
+			
+			<div class="form">
+				<table class="form">
+					<tr>
+						<td class="form-label">
+							Library location
+						</td>
+						<td class="form-control">
+							<input class="settings" id="library" placeholder="Enter path to library" value="{{settingVal 'library'}}">
+						</td>
+					</tr>
+					<tr>
+						<td class="form-label">
+							New books: on initial scan
+						</td>
+						<td class="form-control">
+							<select class="settings" id="initialStatus">
+								<option value="read" {{optionSelected 'initialStatus' 'read'}}>Treat as read</option>
+								<option value="unread" {{optionSelected 'initialStatus' 'unread'}}>Treat as unread</option>
+							</select>
+						</td>
+					</tr>
+					<tr>
+						<td class="form-label">
+							New books: on subsequent scans
+						</td>
+						<td class="form-control">
+							<select class="settings" id="subsequentStatus">
+								<option value="unread" {{optionSelected 'subsequentStatus' 'unread'}}>Treat as unread</option>
+								<option value="read" {{optionSelected 'subsequentStatus' 'read'}}>Treat as read</option>
+							</select>
+						</td>
+					</tr>
+					<tr>
+						<td class="form-label">
+							"Unread" directory match
+						</td>
+						<td class="form-control">
+							<input class="settings" id="unreadMatch" value="{{settingVal 'unreadMatch'}}" placeholder="Enter match string (optional)">
+						</td>
+					</tr>
+				</table>
+			</div>
+
+			<div class="buttons">
+				<button class="settings" id="apply-rescan">
+					Apply and redo initial scan
+				</button>
+				&nbsp;&nbsp;&nbsp;
+				<button class="settings" id="apply">
+					Apply
+				</button>
+			</div>
+		</div>
+	</div>
+
+
+</template>
