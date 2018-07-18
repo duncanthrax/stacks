@@ -13,8 +13,10 @@
 </head>
 
 <body>
-	{{> layers}}
-	<div id="message"></div>
+	{{#if dataReady}}
+		{{> layers}}
+		<div id="message"></div>
+	{{/if}}
 </body>
 
 <template name="layers">
@@ -43,14 +45,16 @@
 	{{#each stacks}}<div class="stack" id="{{id}}" {{stackAttrs}}>
 		{{#each stackBooks id}}<div class="cover" {{coverAttrs}}>{{#unless noStackCover}}<img src="{{loadThumb _id}}">{{/unless}}</div>{{/each}}
 		<div class="name">{{name}}</div>
-	</div>{{/each}}
+	</div>{{else}}
+		{{#if noBooks}}<div class="no-stacks">No books found, check library directory in settings</div>{{/if}}
+	{{/each}}
 
 </template>
 
 <template name="books">
 
 	<div class="title">{{title}}</div>
-	{{#each books}}<div class="book" id="{{id}}" {{bookAttrs}}><div class="title">{{order}}</div><div class="cover" {{coverAttrs}}><img src="{{loadThumb _id}}"></div></div>{{/each}}
+	{{#each books}}<div class="book" id="{{id}}" {{bookAttrs}}><div class="title">{{order}}</div><div class="cover" {{coverAttrs}}><div class="status {{bookStatus}}"></div><div class="pages">{{bookPages}}</div><img src="{{loadThumb _id}}"></div></div>{{/each}}
 
 </template>
 

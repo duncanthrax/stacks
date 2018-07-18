@@ -163,7 +163,7 @@ Jobs.register({
 			return;
 		}
 
-		Misc.update({ name: 'scannerStatus' }, { $set : { status : 'active' } });
+		Misc.update({ name: 'status' }, { $set : { scannerStatus : 'active' } });
 
 		var books = ScanDir(settings.library);
 		var imageRx = new RegExp(/\.(jpg|png)$/, 'i');
@@ -245,7 +245,7 @@ Jobs.register({
 			return true;
 		});
 
-		Misc.update({ name:'scannerStatus' }, { $set : { status : false } });
+		Misc.update({ name: 'status' }, { $set : { scannerStatus : false } });
 
 		if (aborted) {
 			console.log("Scan job aborted");
@@ -253,6 +253,7 @@ Jobs.register({
 		else {
 			// Mark missing books as missing
 			Books.update({ _id: { $nin: books.map(book => book._id) } }, { $set: { missing: true } });
+			Misc.update({ name: 'status' }, { $set : { scannerRunOnLibrary: settings.library } });
 		}
 		
 		this.success();
@@ -265,7 +266,7 @@ Meteor.startup(() => {
 
 	Jobs.clear('*');
 	Misc.update({ name:'settings' }, { $set : { fullRescan : false } });
-	Misc.update({ name:'scannerStatus' }, { $set : { status : false } });
+	Misc.update({ name:'status' }, { $set : { scannerStatus : false } });
 
 	Meteor.publish('books', function() { return Books.find() });
 	Meteor.publish('misc', function() { return Misc.find() });
@@ -275,19 +276,20 @@ Meteor.startup(() => {
 		// Default settings
 		console.log("Creating default settings");
 		Misc.insert({
-			name : 'settings',
-			library: process.env['STACKS_LIBRARY'] || '',
-			initialStatus: 'read',
+			name            : 'settings',
+			library         : process.env['STACKS_LIBRARY'] || '',
+			initialStatus   : 'read',
 			subsequentStatus: 'unread',
-			unreadMatch: '',
-			fullRescan: false
+			unreadMatch     : '',
+			fullRescan      : false
 		});
 	};
-	var scannerStatus = Misc.findOne({name:'scannerStatus'});
-	if (!scannerStatus) {
+	var status = Misc.findOne({name:'status'});
+	if (!status) {
 		Misc.insert({
-			name : 'scannerStatus',
-			status : false
+			name               : 'status',
+			scannerStatus      : false,
+			scannerRunOnLibrary: false
 		});
 	};
 

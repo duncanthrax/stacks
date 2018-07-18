@@ -12,12 +12,13 @@ html {
 }
 
 body {
-    position : fixed;
-    top      : 0px;
-    left     : 0px;
-    right    : 0px;
-    bottom   : 0px;
-    overflow : hidden;
+    position        : fixed;
+    top             : 0px;
+    left            : 0px;
+    right           : 0px;
+    bottom          : 0px;
+    overflow        : hidden;
+    background-color: #222;
 }
 
 #message {
@@ -132,8 +133,58 @@ body {
     border          : 1px solid #ddd;
     background-color: #222;
 }
+.book>.cover>.status {
+    position        : absolute;
+    top             : -2em;
+    left            : 0px;
+    height          : 1em;
+    background-color: #444;
+    border-radius   : 0.2em;
+    padding         : 0.1em 0.3em 0.2em 0.3em;
+    font-size       : 0.7em;
+    box-shadow      : 2px 2px 1px 1px rgba(0,0,0,0.2);
+    min-width       : 4em;
+    display         : none;
+}
+.book>.cover>.pages {
+    position        : absolute;
+    top             : -2em;
+    right           : 0px;
+    height          : 1em;
+    background-color: #252;
+    border-radius   : 0.2em;
+    padding         : 0.1em 0.3em 0.2em 0.3em;
+    font-size       : 0.7em;
+    box-shadow      : 2px 2px 1px 1px rgba(0,0,0,0.2);
+    min-width       : 4em;
+}
 .book>.cover>img {
     width : 100%;
+}
+
+.book>.cover>.status-new {
+    display   : block;
+    background: linear-gradient(to bottom, #eee 0%,#888 100%);
+    color     : #222;
+}
+.book>.cover>.status-new:before {
+    content: "New"
+}
+
+.book>.cover>.status-unread {
+    display         : block;
+    background-color: #d00;
+}
+.book>.cover>.status-unread:before {
+    content: "Unread"
+}
+
+.book>.cover>.status-started {
+    display         : block;
+    background-color: #252;
+}
+.book>.cover>.status-started:before {
+    content: "Started"
 }
 
 .stack {
@@ -167,6 +218,17 @@ body {
     z-index       : 99;
 }
 
+.no-stacks {
+    position   : absolute;
+    left       : 50%;
+    top        : 50%;
+    width      : 70%;
+    text-align : center;
+    transform  : translate(-50%,-50%);
+    font-size  : 24px;
+    color      : orange;
+    text-shadow: 2px 2px 4px #000;
+}
 
 #page {
     position: relative;
@@ -184,21 +246,21 @@ body {
     z-index : 2;
 }
 #page>#progress {
-    position : absolute;
-    display  : inline-block;
-    top      : 50%;
-    left     : 50%;
-    transform: translate(-50%,-50%);
-    z-index  : 1;
-    text-align: center;
-    height:120px;
-    width:120px;
-    font-size:32px;
-    line-height: 120px;
+    position        : absolute;
+    display         : inline-block;
+    top             : 50%;
+    left            : 50%;
+    transform       : translate(-50%,-50%);
+    z-index         : 1;
+    text-align      : center;
+    height          : 120px;
+    width           : 120px;
+    font-size       : 32px;
+    line-height     : 120px;
     background-color: #333;
-    border-radius: 120px;
-    color: orange;
-    text-shadow: 2px 2px 4px #000;
+    border-radius   : 120px;
+    color           : orange;
+    text-shadow     : 2px 2px 4px #000;
 }
 
 .layer#viewer.fit {

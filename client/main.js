@@ -48,8 +48,8 @@ ActiveStack    = new ReactiveVar({});
 ActiveBookId   = new ReactiveVar(false);
 ViewMode       = new ReactiveVar('fit');
 Message        = new ReactiveVar(false);
-
-Subs = [];
+RenderOk       = new ReactiveVar(false);
+RenderDone     = new ReactiveVar(false);
 
 ViewerScrollDir = 'down';
 
@@ -59,13 +59,8 @@ PageJq = false;
 
 Thumbs = new ReactiveDict('thumbs');
 ThumbsLoading = {};
-Template.registerHelper('loadThumb', function(bookId) {
-
-    var dataUrl = Thumbs.get(bookId);
-    if (dataUrl) return dataUrl;
-
-    Message.set("Loading covers");
-
+LoadThumb = function(bookId) {
+    
     if (!ThumbsLoading[bookId]) {
         ThumbsLoading[bookId] = true;
         LocalForage.getItem(bookId, function(err, dataUrl) {
@@ -87,6 +82,15 @@ Template.registerHelper('loadThumb', function(bookId) {
             if (!Object.keys(ThumbsLoading).length) Message.set(false);
         });
     }
+}
+
+Template.registerHelper('loadThumb', function(bookId) {
+
+    var dataUrl = Thumbs.get(bookId);
+    if (dataUrl) return dataUrl;
+
+    Message.set("Loading covers");
+    Meteor.setTimeout(function() { LoadThumb(bookId) }, 300);
 
     return 'data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=';
 });
@@ -143,6 +147,10 @@ Template.layers.helpers({
 
         return Object.keys(style).map(key => { return key+':'+style[key] }).join(';');
     }
+});
+
+Template.layers.onRendered(function() {
+    RenderDone.set(true);
 });
 
 Template.controls.helpers({
@@ -257,6 +265,15 @@ Template.stacks.helpers({
         }});
     },
 
+    noBooks: function() {
+        var status = Misc.findOne({ name: 'status' });
+
+        if (!status.scannerStatus && !Books.find({ missing: { $not: true } }).count())
+            return true;
+
+        return false;
+    },
+
     stackBooks: function(stackId) {
         var lastAr = false;
         return Books.find(
@@ -347,6 +364,28 @@ Template.books.helpers({
         });
     },
 
+    bookStatus: function() {
+        if (this.isRead) return '';
+
+        var activePage = parseInt(this.activePage);
+        var maxPage = parseInt(this.numPages);
+        var mtime = parseInt(this.mtime);
+
+        // More than 2/3 read is "read".
+        if (activePage && activePage > (maxPage * 2/3)) return '';
+
+        if (activePage) return 'status-started';
+        if (mtime > (Date.now() - (14 * 86400))) return 'status-new';
+
+        return 'status-unread';
+    },
+
+    bookPages: function() {
+        if (this.activePage)
+            return (this.activePage+1) + '/' + this.numPages + ' p';
+        return this.numPages + ' p';
+    },
+
     title: function() {
         return ActiveStack.get().name;
     },
@@ -357,7 +396,7 @@ Template.books.helpers({
 
         var bookSize = parseInt( Math.floor(ViewportWidth.get() / numBookColumns) );
         return { style: 'width: ' + bookSize + 'px;' +
-                        'font-size: ' + Math.floor(bookSize / 10) + 'px;'
+                        'font-size: ' + Math.floor(bookSize / 12) + 'px;'
                 };
     },
 
@@ -395,6 +434,12 @@ Template.viewer.events({
         $('.layer#viewer').css('cursor','auto');
         if (CursorHideTimeout) Meteor.clearTimeout(CursorHideTimeout);
         CursorHideTimeout = Meteor.setTimeout(function() { $('.layer#viewer').css('cursor','none') }, 1000);
+    }
+});
+
+Template.body.helpers({
+    dataReady: function() {
+        return RenderOk.get();
     }
 });
 
@@ -467,39 +512,6 @@ Template.body.events({
 
 });
 
-Template.body.onRendered(function() {
-    var self = Template.instance();
-
-    ScrollbarWidth.set($('#viewer').get(0).offsetWidth  - $('#viewer').get(0).clientWidth);
-    ScrollbarHeight.set($('#viewer').get(0).offsetHeight - $('#viewer').get(0).clientHeight);
-    
-    $('#viewer').addClass('fit');
-
-    $( window ).resize(function() {
-      ViewportWidth.set( $('body').width() );
-      ViewportHeight.set( $('body').height() );
-    });
-    ViewportWidth.set( $('body').width() );
-    ViewportHeight.set( $('body').height() );
-
-    self.autorun(function() {
-        if (Subs.find((sub) => { return !sub.ready() })) return;
-
-        var message = Message.get();
-        var scannerStatus = Misc.findOne({ name: 'scannerStatus' });
-        
-        if (scannerStatus.status) {
-            self.$('#message').text("Scanner active").addClass('open');
-            return;
-        }
-
-        if (message)
-            self.$('#message').text(message).addClass('open');
-        else
-            self.$('#message').removeClass('open');
-    });
-
-});
 
 Image.prototype.xhrLoad = function(url, progressCb){
     var self = this;
@@ -524,11 +536,59 @@ Image.prototype.xhrLoadAbort = function() {
 
 Meteor.startup(function() {
 
-    Subs = ['books', 'misc'].map((subname) => { return Meteor.subscribe(subname) });
+    var subs = ['books', 'misc'].map((subname) => { return Meteor.subscribe(subname) });
+
+    Tracker.autorun(() => {
+        if (subs.find((sub) => { return !sub.ready() })) return false;
+        console.log("Subs ready");
+        // Check if we have settings and status
+        var settings = Misc.findOne({ name: 'settings' });
+        var status = Misc.findOne({ name: 'status' });
+
+        if (settings && status) {
+            console.log("Rendering");
+            RenderOk.set(true);
+        }
+    });
+
+    Tracker.autorun(() => {
+        if (!RenderDone.get()) return;
+
+        ScrollbarWidth.set($('#viewer').get(0).offsetWidth  - $('#viewer').get(0).clientWidth);
+        ScrollbarHeight.set($('#viewer').get(0).offsetHeight - $('#viewer').get(0).clientHeight);
+        
+        $('#viewer').addClass('fit');
+
+        $( window ).resize(function() {
+          ViewportWidth.set( $('body').width() );
+          ViewportHeight.set( $('body').height() );
+        });
+        ViewportWidth.set( $('body').width() );
+        ViewportHeight.set( $('body').height() );
+    });
+
+
+    Tracker.autorun(() => {
+        if (!RenderDone.get()) return;
+
+        var message = Message.get();
+        var status = Misc.findOne({ name: 'status' });
+        
+        if (status.scannerStatus) {
+            $('#message').text("Scanner active").addClass('open');
+            return;
+        }
+
+        if (message)
+            $('#message').text(message).addClass('open');
+        else
+            $('#message').removeClass('open');
+    });
 
     // Running when ActiveBookId changes
     Tracker.autorun(() => {
-        if (Subs.find((sub) => { return !sub.ready() })) return;
+        if (!RenderDone.get()) return;
+        
         var activeBookId = ActiveBookId.get();
 
         var activeBook = Tracker.nonreactive(function() { return Books.findOne({ _id: activeBookId }) });
@@ -600,7 +660,8 @@ Meteor.startup(function() {
     var shownBookId = false;
     var shownPage = false;
     Tracker.autorun(() => {
-        if (Subs.find((sub) => { return !sub.ready() })) return;
+        if (!RenderDone.get()) return;
+
         var activeBook = Books.findOne({ _id: ActiveBookId.get() });
         var viewMode = ViewMode.get();
         var viewportWidth = ViewportWidth.get();
