@@ -19,6 +19,8 @@ Thumbs = new Mongo.Collection('thumbs');
 Misc = new Mongo.Collection('misc');
 
 UnpackPaths = {};
+Watchers = {};
+LibrarySubDirs = [];
 
 ReaddirSync = Meteor.wrapAsync(function(dir, cb) { fs.readdir(dir, cb) });
 ExecFileSync = Meteor.wrapAsync(function(cmd, opts, cb) {
@@ -31,30 +33,33 @@ UnpackSync = function(book) {
 	var tmpDir = temp.mkdirSync('stacks-tmp-book-' + book._id);
 	if (book.type == 'cbr') {
 		try {
-			ExecFileSync(rarBin, ['e', '-o+', '-y', '-p-', '-inul', book.path + book.file, tmpDir]);
+			ExecFileSync(rarBin, ['e', '-o+', '-y', '-p-', '-inul', book.library + '/' + book.dir + '/' + book.file, tmpDir]);
 		} catch (code) {
 			console.log(rarBin, "returned exit code", code);
 			// Some CBRs are actually CBZs
-			try { ExecFileSync(zipBin, ['-o', '-j', '-qq', book.path + book.file, '-d', tmpDir]) } catch(e) {};
+			try { ExecFileSync(zipBin, ['-o', '-j', '-qq', book.library + '/' + book.dir + '/' + book.file, '-d', tmpDir]) } catch(e) {};
 		}
 	}
 	else if (book.type == 'cbz') {
-		try { ExecFileSync(zipBin, ['-o', '-j', '-qq', book.path + book.file, '-d', tmpDir]) } catch(e) {};
+		try { ExecFileSync(zipBin, ['-o', '-j', '-qq', book.library + '/' + book.dir + '/' + book.file, '-d', tmpDir]) } catch(e) {};
 	}
 	return tmpDir;
 };
 
 
-ScanDir = function(base, dir, books) {
+ScanDir = function(base, dir, books, dirs) {
 	dir = dir || '';
 	books = books || [];
 
+	dir = dir.replace(/^\/+/, '').replace(/\/+$/, '');
+
+	dirs.push(dir);
+
 	ReaddirSync(base + '/' + dir).forEach((file) => {
-		file = dir + '/' + file;
-		var stats = fs.statSync(base + '/' + file);
-		if (stats && stats.isDirectory()) ScanDir(base, file, books);
+		var stats = fs.statSync(base + '/' + dir + '/' + file);
+		if (stats && stats.isDirectory()) ScanDir(base, dir + '/' + file, books, dirs);
 		else {
-			var m; m = file.match(new RegExp(/\/([^/]+)\.(cbr|cbz)$/,'i'));
+			var m; m = file.match(new RegExp(/^(.+)\.(cbr|cbz)$/,'i'));
 			if (!m) return;
 
 			var name = m[1];
@@ -72,6 +77,8 @@ ScanDir = function(base, dir, books) {
 			var     m = name.match(new RegExp(/^(.+)\s+([0-9a-d#]+)$/,'i'));
 			// <title> <order> - <book title>
 			if (!m) m = name.match(new RegExp(/^(.+)\s+([0-9a-d#]+)\s+\-\s.+$/,'i'));
+			// <title>
+			if (!m) m = name.match(new RegExp(/^(.+)$/,'i'));
 
 			if (!m) {
 				console.log("Unable to parse filename:", name);
@@ -79,7 +86,7 @@ ScanDir = function(base, dir, books) {
 			}
 
 			var stackName = m[1];
-			var order = m[2];
+			var order = m[2] || '';
 			order = order.replace(new RegExp(/\#/,'g'), '');
 
 			var id = crypto.createHash('sha1').update(stats.mtime.toString()).update(name.toLowerCase().replace(new RegExp(/\s/,'g'), '')).digest('hex');
@@ -90,12 +97,14 @@ ScanDir = function(base, dir, books) {
 					 name: name,
 				  stackId: stackId,
 				stackName: stackName,
-				    order: sprintf("#%05s", order),
+				    order: order ? sprintf("#%05s", order) : 'Single',
 				     type: type,
-				     path: base,
+				  library: base,
+				      dir: dir,
 				     file: file,
 				     size: stats.size,
-				    mtime: Math.floor(stats.mtimeMs)
+				    mtime: Math.floor(stats.mtimeMs),
+				  missing: false
 			});
 		}
 	});
@@ -148,115 +157,142 @@ Router.route('page', {
 });
 
 ScanLibJobLock = false;
-StartScanLib = function() {
-	var job = Jobs.run('scanLib');
+StartScanLib = function(nukeLibrary) {
+	var job = Jobs.run('scanLib', nukeLibrary);
 	ScanLibJobLock = job._id;
 	console.log("Scheduled new scanLib job", job._id);
 };
 
 Jobs.register({
-	'scanLib': function() {
+	'scanLib': function(nukeLibrary) {
+
 		var settings = Misc.findOne({ name: 'settings' });
 		if (!settings.library) {
-			this.success();
+			this.failure();
 			this.remove();
 			return;
 		}
+		var status = Misc.findOne({ name: 'status' });
+
+		var initialScan = (status.scannerRunOnLibrary === settings.library) ? false : true;
+		var markAsRead = false;
+		if ( initialScan && settings.initialStatus    == 'read') markAsRead = true;
+		if (!initialScan && settings.subsequentStatus == 'read') markAsRead = true;
+		var imageRx = new RegExp(/\.(jpg|png)$/, 'i');
+		var aborted = false;
 
 		Misc.update({ name: 'status' }, { $set : { scannerStatus : 'active' } });
 
-		var books = ScanDir(settings.library);
-		var imageRx = new RegExp(/\.(jpg|png)$/, 'i');
+		if (nukeLibrary) {
+			Books.remove({});
+			Thumbs.remove({});
+		}
 
-		var aborted = false;
-		books.every((book) => {
-			if (Books.find({ _id: book._id }).count()) return true;
+		var dirs = [];
+		try {
+			var books = ScanDir(settings.library, false, false, dirs);
+			books.every((book) => {
+				var existingBook = Books.findOne({ _id: book._id });
+				if (existingBook) {
+					if (existingBook.missing)
+						Books.update({ _id: book._id }, { $set : { missing: false }});
+					return true;
+				}
 
-			console.log("[new]", book._id, book.stackId, book.order, book.type, book.name);
+				console.log("[new]", book._id, book.stackId, book.order, book.type, book.name);
 
-			temp.track();
-			var tmpDir = UnpackSync(book);
-			var files = ReaddirSync(tmpDir).filter(file => { return file.match(imageRx) })
-				.sort((a,b) => {
-					if (a.toLowerCase() > b.toLowerCase()) return 1;
-					if (a.toLowerCase() < b.toLowerCase()) return -1;
-					return 0;
+				temp.track();
+				var tmpDir = UnpackSync(book);
+				var files = ReaddirSync(tmpDir).filter(file => { return file.match(imageRx) })
+					.sort((a,b) => {
+						if (a.toLowerCase() > b.toLowerCase()) return 1;
+						if (a.toLowerCase() < b.toLowerCase()) return -1;
+						return 0;
+					});
+				if (!files[0]) {
+					console.log(book.name,"does not contain any images");
+					temp.cleanup();
+					return true;
+				}
+				book.numPages = files.length;
+				book.pages = [];
+				files.forEach(file => {
+					var stats = fs.statSync(tmpDir + '/' + file);
+					book.pages.push({
+						file: file,
+						size: stats.size
+					});
 				});
-			if (!files[0]) {
-				console.log(book.name,"does not contain any images");
-				temp.cleanup();
-				return true;
-			}
-			book.numPages = files.length;
-			book.pages = [];
-			files.forEach(file => {
-				var stats = fs.statSync(tmpDir + '/' + file);
-				book.pages.push({
-					file: file,
-					size: stats.size
+				var out;
+				try {
+					out = ExecFileSync(convertBin, [
+						tmpDir + '/' + files[0],
+						'(',
+						'+clone',
+						'-resize', 'x600',
+						'-write',
+						tmpDir + '/_stacks-thumb.jpg',
+						')',
+						'-resize', 'x600',
+						'info:'
+					]);
+				} catch(e) {};
+				var s = out.match(new RegExp(/\s+([0-9]+)x600\s+/ ));
+				if (!s[1]) {
+					console.log(book.name,"unable to get thumbnail AR");
+					temp.cleanup();
+					return true;
+				}
+				book.thumbAr = parseFloat(sprintf("%.2f", parseInt(s[1]) / 600));
+
+				var stats = fs.statSync(tmpDir + '/_stacks-thumb.jpg');
+				if (!stats || !stats.size) {
+					console.log(book.name,"unable to generate thumbnail");
+					temp.cleanup();
+					return true;
+				}
+				var thumbDataURL = 'data:image/jpeg;base64,'
+					+ fs.readFileSync(tmpDir + '/_stacks-thumb.jpg', { encoding: 'base64'})
+					.replace((new RegExp(/[\/\+\=]/,'g')), function(s) { return sprintf('%%%02X', s.charCodeAt()) });
+
+				Thumbs.insert({
+					_id: book._id,
+					base64: thumbDataURL
 				});
-			});
-			var out;
-			try {
-				out = ExecFileSync(convertBin, [
-					tmpDir + '/' + files[0],
-					'(',
-					'+clone',
-					'-resize', 'x600',
-					'-write',
-					tmpDir + '/_stacks-thumb.jpg',
-					')',
-					'-resize', 'x600',
-					'info:'
-				]);
-			} catch(e) {};
-			var s = out.match(new RegExp(/\s+([0-9]+)x600\s+/ ));
-			if (!s[1]) {
-				console.log(book.name,"unable to get thumbnail AR");
+
 				temp.cleanup();
-				return true;
-			}
-			book.thumbAr = parseFloat(sprintf("%.2f", parseInt(s[1]) / 600));
 
-			var stats = fs.statSync(tmpDir + '/_stacks-thumb.jpg');
-			if (!stats || !stats.size) {
-				console.log(book.name,"unable to generate thumbnail");
-				temp.cleanup();
-				return true;
-			}
-			var thumbDataURL = 'data:image/jpeg;base64,'
-				+ fs.readFileSync(tmpDir + '/_stacks-thumb.jpg', { encoding: 'base64'})
-				.replace((new RegExp(/[\/\+\=]/,'g')), function(s) { return sprintf('%%%02X', s.charCodeAt()) });
+				book.isRead = markAsRead;
+				Books.insert(book);
 
-			Thumbs.insert({
-				_id: book._id,
-				base64: thumbDataURL
+				if (ScanLibJobLock !== this.document._id) {
+					aborted = true;
+					return false;
+				}
+
+				return true;
 			});
-
-			temp.cleanup();
-
-			Books.insert(book);
-
-			if (ScanLibJobLock !== this.document._id) {
-				aborted = true;
-				return false;
-			}
-
-			return true;
-		});
-
-		Misc.update({ name: 'status' }, { $set : { scannerStatus : false } });
+		}
+		catch(e) {
+			// Something segged
+			console.log("Exception during scan job:", e);
+			aborted = true;
+		}
 
 		if (aborted) {
 			console.log("Scan job aborted");
+			this.failure();
 		}
 		else {
 			// Mark missing books as missing
-			Books.update({ _id: { $nin: books.map(book => book._id) } }, { $set: { missing: true } });
+			Books.update({ _id: { $nin: books.map(book => book._id) } }, { $set: { missing: true } }, {multi:true});
+			LibrarySubDirs = dirs;
 			Misc.update({ name: 'status' }, { $set : { scannerRunOnLibrary: settings.library } });
+			this.success();
 		}
 		
-		this.success();
+		Misc.update({ name: 'status' }, { $set : { scannerStatus : false } });
+
 		this.remove();
 	}
 });
@@ -293,8 +329,7 @@ Meteor.startup(() => {
 		});
 	};
 
-	settingsCursor = Misc.find({ name: 'settings' });
-	settingsCursor.observeChanges({
+	Misc.find({ name: 'settings' }).observeChanges({
 		changed(id, fields) {
 			if (fields.library) {
 				// Library location changed
@@ -304,10 +339,40 @@ Meteor.startup(() => {
 				// Full rescan requested
 				Misc.update({ name:'settings' }, { $set : { fullRescan : false } });
 
-				Books.remove({});
-				Thumbs.remove({});
-				
-				StartScanLib();
+				StartScanLib(true);
+			}
+		}
+	});
+
+	Misc.find({ name: 'status' }).observeChanges({
+		changed(id, fields) {
+			console.log("Status changed: ", fields);
+			if (fields.scannerStatus === false) {
+				// Scanner exited
+				var status   = Misc.findOne({name:'status'});
+				var settings = Misc.findOne({name:'settings'});
+				if (settings.library === status.scannerRunOnLibrary) {
+					// Delete old watchers
+					Object.keys(Watchers).forEach(path => {
+						if (Watchers[path]) Watchers[path].close();
+						Watchers[path] = null; delete Watchers[path];
+					});
+
+					// Set up new watchers
+					var watchListenerTimeout = false;
+					var watchListener = function(type, filename) {
+						if (watchListenerTimeout) Meteor.clearTimeout(watchListenerTimeout);
+						console.log("Scheduling library scan in 5 seconds");
+						watchListenerTimeout = Meteor.setTimeout(function() { StartScanLib() }, 5000);
+					};
+
+					console.log("Watching", LibrarySubDirs.length, "directories");
+					LibrarySubDirs.forEach( dir => {
+						if (!Watchers[settings.library + '/' + dir]) {
+							Watchers[settings.library + '/' + dir] = fs.watch(settings.library + '/' + dir, {}, Meteor.bindEnvironment((type,filename) => { watchListener(type, filename) }));
+						}
+					});
+				}
 			}
 		}
 	});
@@ -326,6 +391,10 @@ Meteor.startup(() => {
 		},
 
 		setSettings: function(settings) {
+			if (settings.library) settings.library = settings.library.replace(/\/+$/, '');
+			if (!settings.library.match(/^\//)) settings.library = false;
+
+			if (!settings.library) delete settings['library'];
 			Misc.update({ name:'settings' }, { $set : settings });
 		}
 	});

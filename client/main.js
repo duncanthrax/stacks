@@ -257,7 +257,7 @@ Template.stacks.helpers({
 
     stacks: function() {
         var stackMap = {};
-        Books.find({ missing: { $not: true } }).forEach(book => { stackMap[book.stackId] = book.stackName });
+        Books.find({ missing: false }).forEach(book => { stackMap[book.stackId] = book.stackName });
 
         return Object.keys(stackMap).sort().map(stackId => { return {
             name: stackMap[stackId],
@@ -268,7 +268,7 @@ Template.stacks.helpers({
     noBooks: function() {
         var status = Misc.findOne({ name: 'status' });
 
-        if (!status.scannerStatus && !Books.find({ missing: { $not: true } }).count())
+        if (!status.scannerStatus && !Books.find({ missing: false }).count())
             return true;
 
         return false;
@@ -277,7 +277,7 @@ Template.stacks.helpers({
     stackBooks: function(stackId) {
         var lastAr = false;
         return Books.find(
-            { missing: { $not: true }, stackId: stackId },
+            { missing: false, stackId: stackId },
             { sort: [['order', 'asc']] }
         ).fetch().slice(0,36).map((book,idx,all) => {
             book.stackIdx = idx;
@@ -357,7 +357,7 @@ Template.books.helpers({
 
     books: function() {
         return Books.find(
-            { missing: { $not: true }, stackId: ActiveStack.get().id },
+            { missing: false, stackId: ActiveStack.get().id },
             { sort: [['order', 'asc']] }
         ).fetch().map((book,idx,all) => {
             return book;
@@ -375,7 +375,7 @@ Template.books.helpers({
         if (activePage && activePage > (maxPage * 2/3)) return '';
 
         if (activePage) return 'status-started';
-        if (mtime > (Date.now() - (14 * 86400))) return 'status-new';
+        if (mtime > (Date.now() - (1000 * 14 * 86400))) return 'status-new';
 
         return 'status-unread';
     },
