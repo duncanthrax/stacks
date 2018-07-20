@@ -220,7 +220,10 @@ Template.controls.events({
                 switch (ActiveLayer.get()) {
                     case 'settings' : ActiveLayer.set('stacks'); break;
                     case 'books'    : ActiveLayer.set('stacks'); break;
-                    case 'viewer'   : ActiveLayer.set('books'); break;  
+                    case 'viewer'   :
+                        ActiveBookId.set(false);
+                        ActiveLayer.set('books');
+                    break;
                 }
             break;
             case 'colup':
@@ -353,6 +356,10 @@ Template.settings.events({
 
 });
 
+Template.books.created = function() {
+  this.menuOpenBookId = new ReactiveVar(false);
+};
+
 Template.books.helpers({
 
     books: function() {
@@ -362,6 +369,12 @@ Template.books.helpers({
         ).fetch().map((book,idx,all) => {
             return book;
         });
+    },
+
+    menuOpen: function() {
+        var self = Template.instance();
+
+        return self.menuOpenBookId.get() == this._id;
     },
 
     bookStatus: function() {
@@ -422,9 +435,19 @@ Template.viewer.onRendered(function() {
 });
 
 Template.books.events({
-    'click .book': function() {
+    'click .cover>img': function(e, self) {
+        if (self.menuOpenBookId.get() == this._id) return;
         ActiveBookId.set(this._id);
         ActiveLayer.set('viewer');
+    },
+    'click .actions': function(e, self) {
+        $(e.target).closest('button').blur();
+        self.menuOpenBookId.set(self.menuOpenBookId.get() == this._id ? false : this._id);
+    },
+    'click .menuitem': function(e, self) {
+        var which = $(e.target).closest('div').data('action');
+        Meteor.call('bookAction', which, this._id);
+        self.menuOpenBookId.set(false);
     }
 });
 
@@ -588,13 +611,6 @@ Meteor.startup(function() {
     // Running when ActiveBookId changes
     Tracker.autorun(() => {
         if (!RenderDone.get()) return;
-        
-        var activeBookId = ActiveBookId.get();
-
-        var activeBook = Tracker.nonreactive(function() { return Books.findOne({ _id: activeBookId }) });
-        if (!activeBook) return;
-
-        console.log("Loading pages for book", activeBook.name);
 
         // Flush viewer display
         PageJq.find('img').remove();
@@ -602,10 +618,18 @@ Meteor.startup(function() {
         // Abort load of old pages, dispose.
         if (Pages) {
             Pages.forEach((page) => {
+                if (!page.img) return;
                 page.img.xhrLoadAbort();
                 page.img = null;
             });
         }
+        
+        var activeBookId = ActiveBookId.get();
+
+        var activeBook = Tracker.nonreactive(function() { return Books.findOne({ _id: activeBookId }) });
+        if (!activeBook) return;
+
+        console.log("Loading pages for book", activeBook.name);
 
         // Clone pages from book
         Pages = activeBook.pages.map(page => {
@@ -644,9 +668,11 @@ Meteor.startup(function() {
                 else {
                     Pages[nextPage].loadedBytes = loadedBytes;
                     Pages[nextPage].loadedPercent = parseInt(loadedBytes / (Pages[nextPage].size / 100));
-                    var latestBook = Tracker.nonreactive(function() { return Books.findOne({ _id: ActiveBookId.get() }) });
+                    var latestBookId = ActiveBookId.get();
+                    var latestBook = Tracker.nonreactive(function() { return Books.findOne({ _id: latestBookId }) });
+                    if (!latestBookId || !latestBook) return;
                     // If this is the book/page currently shown, update progress meter.
-                    if (latestBook._id == activeBook._id && latestBook.activePage == nextPage) {
+                    if (latestBookId == activeBook._id && latestBook.activePage == nextPage) {
                         $('#progress').html(Pages[nextPage].loadedPercent + '%');
                     }
                 }

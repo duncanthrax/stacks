@@ -114,50 +114,63 @@ body {
     position      : relative;
     vertical-align: top;
     cursor        : pointer;
+    margin-top    : 2.5em;
     text-align    : center;
-}
-.book>.title {
-    position      : relative;
-    display       : block;
-    height        : 10%;
-    text-align    : center;
-    vertical-align: bottom;
-    text-shadow   : 2px 2px 4px #000;
-    margin-top    : 10%;
-    margin-bottom : 3%;
 }
 .book>.cover {
     position        : relative;
     display         : inline-block;
     width           : 90%;
-    border          : 1px solid #ddd;
+    border          : 1px solid #777;
     background-color: #222;
+    border-radius   : 0.1em;
 }
-.book>.cover>.status {
+.book>.cover>.actions {
     position        : absolute;
     top             : -2em;
-    left            : 0px;
-    height          : 1em;
-    background-color: #444;
-    border-radius   : 0.2em;
-    padding         : 0.1em 0.3em 0.2em 0.3em;
-    font-size       : 0.7em;
-    box-shadow      : 2px 2px 1px 1px rgba(0,0,0,0.2);
-    min-width       : 4em;
-    display         : none;
+    left            : -1px;
+    height          : 1.6em;
+    line-height     : 1.6em;
+    background-color: #333;
+    font-size       : inherit;
+    color           : #ddd;
+    border-radius   : 0.1em;
+    padding         : 0px 0px 0px 0.5em;
+    width           : calc(100% + 2px);
+    text-align      : left;
+    box-shadow      : 0px 0px 4px 4px rgba(0,0,0,0.2);
+    text-shadow     : 2px 2px 4px #000;
+    cursor          : pointer;
+    outline         : none !important;
 }
-.book>.cover>.pages {
+.book>.cover>.actions>.caret {
+    position   : absolute;
+    right      : 5%;
+    top        : 0px;
+    text-shadow: 2px 2px 4px #000;
+    font-size  : 0.7em;
+    color      : #aaa;
+}
+.book>.cover>.menu {
     position        : absolute;
-    top             : -2em;
-    right           : 0px;
-    height          : 1em;
-    background-color: #252;
-    border-radius   : 0.2em;
-    padding         : 0.1em 0.3em 0.2em 0.3em;
-    font-size       : 0.7em;
-    box-shadow      : 2px 2px 1px 1px rgba(0,0,0,0.2);
-    min-width       : 4em;
+    top             : 0px;
+    left            : 1em;
+    width           : calc(100% - 2em);
 }
+.book>.cover>.menu>.menuitem {
+    position        : relative;
+    text-align      : center;
+    padding         : 0.4em 0.4em 0.4em 0.4em;
+    color           : orange;
+    background-color: #333;
+    border          : 1px solid orange;
+    cursor          : pointer;
+    margin-top      : 1em;
+    text-shadow     : 2px 2px 4px #000;
+    box-shadow      : 0px 0px 4px 4px rgba(0,0,0,0.4);
+    border-radius   : 0.3em;
+}
+
 .book>.cover>img {
     width : 100%;
 }
@@ -165,26 +178,26 @@ body {
 .book>.cover>.status-new {
     display   : block;
     background: linear-gradient(to bottom, #eee 0%,#888 100%);
-    color     : #222;
+    color     : #ff5;
 }
-.book>.cover>.status-new:before {
-    content: "New"
+.book>.cover>.status-new:after {
+    content: " | New"
 }
 
 .book>.cover>.status-unread {
-    display         : block;
-    background-color: #d00;
+    display   : block;
+    background: linear-gradient(to bottom, #712020 0%,#511010 100%);
 }
-.book>.cover>.status-unread:before {
-    content: "Unread"
+.book>.cover>.status-unread:after {
+    content: " | Unread"
 }
 
 .book>.cover>.status-started {
-    display         : block;
-    background-color: #252;
+    display   : block;
+    background: linear-gradient(to bottom, #206120 0%,#104110 100%);
 }
-.book>.cover>.status-started:before {
-    content: "Started"
+.book>.cover>.status-started:after {
+    content: " | Started"
 }
 
 .stack {

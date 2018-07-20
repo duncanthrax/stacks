@@ -8,7 +8,7 @@ var temp = require('temp');
 var sprintf = require('sprintf-js').sprintf;
 var execFile = require('child_process').execFile;
 
-let {msleep} = require('usleep');
+var {msleep} = require('usleep');
 
 var rarBin = '/usr/bin/unrar';
 var zipBin = '/usr/bin/unzip';
@@ -22,6 +22,11 @@ UnpackPaths = {};
 Watchers = {};
 LibrarySubDirs = [];
 
+Logger = function(ctx, msg, obj) {
+	if (obj) console.log("["+ctx+"]",msg,obj);
+	else     console.log("["+ctx+"]",msg);
+};
+
 ReaddirSync = Meteor.wrapAsync(function(dir, cb) { fs.readdir(dir, cb) });
 ExecFileSync = Meteor.wrapAsync(function(cmd, opts, cb) {
 	execFile(cmd, opts, function(error, stdout, stderr) {
@@ -29,20 +34,37 @@ ExecFileSync = Meteor.wrapAsync(function(cmd, opts, cb) {
 	});
 });
 
-UnpackSync = function(book) {
+UnpackSync = function(library, book) {
 	var tmpDir = temp.mkdirSync('stacks-tmp-book-' + book._id);
+	
+	// Alway try both rar/zip but start with the more likely one.
 	if (book.type == 'cbr') {
 		try {
-			ExecFileSync(rarBin, ['e', '-o+', '-y', '-p-', '-inul', book.library + '/' + book.dir + '/' + book.file, tmpDir]);
+			ExecFileSync(rarBin, ['e', '-o+', '-y', '-p-', '-inul', library + '/' + book.dir + '/' + book.file, tmpDir]);
 		} catch (code) {
-			console.log(rarBin, "returned exit code", code);
-			// Some CBRs are actually CBZs
-			try { ExecFileSync(zipBin, ['-o', '-j', '-qq', book.library + '/' + book.dir + '/' + book.file, '-d', tmpDir]) } catch(e) {};
+			Logger(book.name, rarBin + " returned exit code " + code + ", trying ZIP");
+			try {
+				ExecFileSync(zipBin, ['-o', '-j', '-qq', library + '/' + book.dir + '/' + book.file, '-d', tmpDir]);
+			}
+			catch(e) {
+				Logger(book.name, zipBin + " returned exit code " + code);
+			};
 		}
 	}
 	else if (book.type == 'cbz') {
-		try { ExecFileSync(zipBin, ['-o', '-j', '-qq', book.library + '/' + book.dir + '/' + book.file, '-d', tmpDir]) } catch(e) {};
+		try {
+			ExecFileSync(zipBin, ['-o', '-j', '-qq', library + '/' + book.dir + '/' + book.file, '-d', tmpDir]);
+		} catch (code) {
+			Logger(book.name, zipBin + " returned exit code " + code + ", trying RAR");
+			try {
+				ExecFileSync(rarBin, ['e', '-o+', '-y', '-p-', '-inul', library + '/' + book.dir + '/' + book.file, tmpDir]);
+			}
+			catch(e) {
+				Logger(book.name, rarBin + " returned exit code " + code);
+			};
+		}
 	}
+
 	return tmpDir;
 };
 
@@ -81,7 +103,7 @@ ScanDir = function(base, dir, books, dirs) {
 			if (!m) m = name.match(new RegExp(/^(.+)$/,'i'));
 
 			if (!m) {
-				console.log("Unable to parse filename:", name);
+				Logger("scanDir", "Unable to parse filename '" + name + "'");
 				return;
 			}
 
@@ -99,7 +121,6 @@ ScanDir = function(base, dir, books, dirs) {
 				stackName: stackName,
 				    order: order ? sprintf("#%05s", order) : 'Single',
 				     type: type,
-				  library: base,
 				      dir: dir,
 				     file: file,
 				     size: stats.size,
@@ -130,6 +151,8 @@ Router.route('page', {
 			return data;
 		};
 
+		var settings = Misc.findOne({ name: 'settings' });
+
 		var pageNum = parseInt(this.params[1]);
 		if (pageNum == NaN) return fourOfour();
 
@@ -141,12 +164,19 @@ Router.route('page', {
 
 		var data = null;
 		if (UnpackPaths[book._id]) data = readPage(UnpackPaths[book._id], page);
-		if (!data) {
-			UnpackPaths[book._id] = UnpackSync(book);
+		if (data) {
+			Logger(book.name, "Download request for page " + pageNum + ", already unpacked");
+		}
+		else {
+			Logger(book.name, "Download request for page " + pageNum + ", unpacking");
+			UnpackPaths[book._id] = UnpackSync(settings.library, book);
 			data = readPage(UnpackPaths[book._id], page);
 		}
 
-		if (!data) return fourOfour();
+		if (!data) {
+			Logger(book.name, "Unable to read image data for page " + pageNum);
+			return fourOfour();
+		}
 
 		fs.unlinkSync(UnpackPaths[book._id] + '/' + page.file);
 
@@ -156,20 +186,45 @@ Router.route('page', {
 	}
 });
 
-ScanLibJobLock = false;
-StartScanLib = function(nukeLibrary) {
-	var job = Jobs.run('scanLib', nukeLibrary);
-	ScanLibJobLock = job._id;
-	console.log("Scheduled new scanLib job", job._id);
+ScanLibJobId = false;
+PendingJobTimeout = false;
+AbortScanLibJob = false;
+NukeLibraryRequested = false;
+StartScanLib = function() {
+
+	if (PendingJobTimeout) return;
+
+	if (ScanLibJobId) {
+		Logger("scanLib", "Job already scheduled or running, aborting");
+		AbortScanLibJob = true;
+
+		var checkJob; checkJob = () => {
+			if (!ScanLibJobId) {
+				PendingJobTimeout = false;
+				Meteor.setTimeout(StartScanLib, 10);
+				return;
+			}
+			PendingJobTimeout = Meteor.setTimeout(checkJob, 1000);
+		}; checkJob();
+
+		return;
+	}
+
+	ScanLibJobId = Jobs.run('scanLib')._id;
+	Logger("scanLib", "Scheduled new job " + ScanLibJobId);
 };
 
 Jobs.register({
-	'scanLib': function(nukeLibrary) {
+	'scanLib': function() {
+
+		Logger("scanLib", "Starting job " + this.document._id);
 
 		var settings = Misc.findOne({ name: 'settings' });
-		if (!settings.library) {
+		if (!settings.library || AbortScanLibJob) {
+			Logger("scanLib", "Job " + this.document._id + " aborted on startup");
 			this.failure();
-			this.remove();
+			AbortScanLibJob = false;
+			ScanLibJobId = false;
 			return;
 		}
 		var status = Misc.findOne({ name: 'status' });
@@ -179,30 +234,43 @@ Jobs.register({
 		if ( initialScan && settings.initialStatus    == 'read') markAsRead = true;
 		if (!initialScan && settings.subsequentStatus == 'read') markAsRead = true;
 		var imageRx = new RegExp(/\.(jpg|png)$/, 'i');
-		var aborted = false;
 
 		Misc.update({ name: 'status' }, { $set : { scannerStatus : 'active' } });
 
-		if (nukeLibrary) {
+		if (NukeLibraryRequested) {
+			Logger("scanLib", "Job " + this.document._id + " nuking library");
 			Books.remove({});
 			Thumbs.remove({});
+			NukeLibraryRequested = false;
 		}
 
 		var dirs = [];
 		try {
 			var books = ScanDir(settings.library, false, false, dirs);
+			Logger("scanLib", "Job " + this.document._id + " found " + books.length + " books");
 			books.every((book) => {
+
 				var existingBook = Books.findOne({ _id: book._id });
 				if (existingBook) {
-					if (existingBook.missing)
+
+					// Reappeared?
+					if (existingBook.missing) {
 						Books.update({ _id: book._id }, { $set : { missing: false }});
+						Logger(book.name, "Reappeared after being missing");
+					}
+					
+					// Internal move?
+					if (existingBook.dir !== book.dir) {
+						Books.update({ _id: book._id }, { $set : { dir: book.dir }});
+						Logger(book.name, "Changed to directory '" + book.dir + "'");
+					}
+
 					return true;
 				}
 
-				console.log("[new]", book._id, book.stackId, book.order, book.type, book.name);
-
+				Logger(book.name, "Trying to add as new book, id " + book._id);
 				temp.track();
-				var tmpDir = UnpackSync(book);
+				var tmpDir = UnpackSync(settings.library, book);
 				var files = ReaddirSync(tmpDir).filter(file => { return file.match(imageRx) })
 					.sort((a,b) => {
 						if (a.toLowerCase() > b.toLowerCase()) return 1;
@@ -210,7 +278,7 @@ Jobs.register({
 						return 0;
 					});
 				if (!files[0]) {
-					console.log(book.name,"does not contain any images");
+					Logger(book.name, "Book does not contain any images, aborting");
 					temp.cleanup();
 					return true;
 				}
@@ -236,18 +304,18 @@ Jobs.register({
 						'-resize', 'x600',
 						'info:'
 					]);
-				} catch(e) {};
+				} catch(e) { out = '' };
 				var s = out.match(new RegExp(/\s+([0-9]+)x600\s+/ ));
 				if (!s[1]) {
-					console.log(book.name,"unable to get thumbnail AR");
+					Logger(book.name, "Unable to parse convert output, aborting");
 					temp.cleanup();
 					return true;
 				}
-				book.thumbAr = parseFloat(sprintf("%.2f", parseInt(s[1]) / 600));
+				book.thumbAr = parseFloat(sprintf("%.3f", parseInt(s[1]) / 600));
 
 				var stats = fs.statSync(tmpDir + '/_stacks-thumb.jpg');
 				if (!stats || !stats.size) {
-					console.log(book.name,"unable to generate thumbnail");
+					Logger(book.name, "Unable to generate thubnail, aborting");
 					temp.cleanup();
 					return true;
 				}
@@ -263,24 +331,24 @@ Jobs.register({
 				temp.cleanup();
 
 				book.isRead = markAsRead;
+
+				//Logger("scanLib", "new book", book);
 				Books.insert(book);
+				Logger(book.name, "Successfully added as new book with ID " + book._id);
 
-				if (ScanLibJobLock !== this.document._id) {
-					aborted = true;
-					return false;
-				}
-
-				return true;
+				return AbortScanLibJob ? false : true;
 			});
 		}
 		catch(e) {
 			// Something segged
-			console.log("Exception during scan job:", e);
-			aborted = true;
+			Logger("scanLib","Exception during job", e);
+			AbortScanLibJob = true;
 		}
 
-		if (aborted) {
-			console.log("Scan job aborted");
+		Misc.update({ name: 'status' }, { $set : { scannerStatus : false } });
+
+		if (AbortScanLibJob) {
+			Logger("scanLib", "Job aborted");
 			this.failure();
 		}
 		else {
@@ -290,15 +358,15 @@ Jobs.register({
 			Misc.update({ name: 'status' }, { $set : { scannerRunOnLibrary: settings.library } });
 			this.success();
 		}
-		
-		Misc.update({ name: 'status' }, { $set : { scannerStatus : false } });
 
-		this.remove();
+		AbortScanLibJob = false;
+		ScanLibJobId = false;
 	}
 });
 
 
 Meteor.startup(() => {
+	Logger("startup", "Stacks server starting");
 
 	Jobs.clear('*');
 	Misc.update({ name:'settings' }, { $set : { fullRescan : false } });
@@ -310,7 +378,7 @@ Meteor.startup(() => {
 	var settings = Misc.findOne({name:'settings'});
 	if (!settings) {
 		// Default settings
-		console.log("Creating default settings");
+		Logger("startup", "Creating default settings");
 		Misc.insert({
 			name            : 'settings',
 			library         : process.env['STACKS_LIBRARY'] || '',
@@ -322,6 +390,7 @@ Meteor.startup(() => {
 	};
 	var status = Misc.findOne({name:'status'});
 	if (!status) {
+		Logger("startup", "Creating default status");
 		Misc.insert({
 			name               : 'status',
 			scannerStatus      : false,
@@ -331,27 +400,32 @@ Meteor.startup(() => {
 
 	Misc.find({ name: 'settings' }).observeChanges({
 		changed(id, fields) {
+
 			if (fields.library) {
 				// Library location changed
-				StartScanLib();
+				Logger("state", "Library location changed to " + fields.library);
 			}
 			if (fields.fullRescan) {
 				// Full rescan requested
 				Misc.update({ name:'settings' }, { $set : { fullRescan : false } });
-
-				StartScanLib(true);
+				Misc.update({ name:'status' }, { $set : { scannerRunOnLibrary : false } });
+				Logger("state", "Full library rescan requested");
+				NukeLibraryRequested = true;
 			}
+
+			if (NukeLibraryRequested || fields.library) StartScanLib();
 		}
 	});
 
 	Misc.find({ name: 'status' }).observeChanges({
 		changed(id, fields) {
-			console.log("Status changed: ", fields);
 			if (fields.scannerStatus === false) {
 				// Scanner exited
+				Logger("state", "Scanner exited");
 				var status   = Misc.findOne({name:'status'});
 				var settings = Misc.findOne({name:'settings'});
 				if (settings.library === status.scannerRunOnLibrary) {
+					
 					// Delete old watchers
 					Object.keys(Watchers).forEach(path => {
 						if (Watchers[path]) Watchers[path].close();
@@ -362,22 +436,27 @@ Meteor.startup(() => {
 					var watchListenerTimeout = false;
 					var watchListener = function(type, filename) {
 						if (watchListenerTimeout) Meteor.clearTimeout(watchListenerTimeout);
-						console.log("Scheduling library scan in 5 seconds");
-						watchListenerTimeout = Meteor.setTimeout(function() { StartScanLib() }, 5000);
+						Logger("state", "Watch event, (re-)scheduling library scan in 5 seconds");
+						watchListenerTimeout = Meteor.setTimeout(StartScanLib, 5000);
 					};
 
-					console.log("Watching", LibrarySubDirs.length, "directories");
+					Logger("state", "Watching " + LibrarySubDirs.length + " directories");
 					LibrarySubDirs.forEach( dir => {
 						if (!Watchers[settings.library + '/' + dir]) {
 							Watchers[settings.library + '/' + dir] = fs.watch(settings.library + '/' + dir, {}, Meteor.bindEnvironment((type,filename) => { watchListener(type, filename) }));
 						}
 					});
+
 				}
 			}
 		}
 	});
 
+	// Startup scan
 	StartScanLib();
+
+	// Run a scan every hour
+	Meteor.setInterval(StartScanLib, (1000 * 60 * 60));
 
 	Meteor.methods({
 		getThumb: function(bookId) {
@@ -396,7 +475,29 @@ Meteor.startup(() => {
 
 			if (!settings.library) delete settings['library'];
 			Misc.update({ name:'settings' }, { $set : settings });
+		},
+
+		bookAction: function(action, bookId) {
+			var book = Books.findOne({ _id: bookId });
+			if (!book) return '';
+			switch (action) {
+				case 'markRead':
+					Logger("state", "Marking '" + book.name + "' read");
+					Books.update({ _id: bookId }, { $set : { isRead: true } });
+				break;
+				case 'markUnread':
+					Logger("state", "Marking '" + book.name + "' unread");
+					Books.update({ _id: bookId }, { $set : { isRead: false, activePage: 0 } });
+				break;
+				case 'markMassRead':
+					Logger("state", "Marking " + book.stackId + " read up to order " + book.order);
+					Books.update({ stackId: book.stackId, order: { $lte: book.order } }, { $set : { isRead : true } },{multi:true});
+				break;
+				case 'markMassUnread':
+					Logger("state", "Marking " + book.stackId + " unread from order " + book.order);
+					Books.update({ stackId: book.stackId, order: { $gte: book.order } }, { $set : { isRead : false, activePage: 0 } },{multi:true});
+				break;
+			}
 		}
 	});
 });
- 

@@ -54,7 +54,22 @@
 <template name="books">
 
 	<div class="title">{{title}}</div>
-	{{#each books}}<div class="book" id="{{id}}" {{bookAttrs}}><div class="title">{{order}}</div><div class="cover" {{coverAttrs}}><div class="status {{bookStatus}}"></div><div class="pages">{{bookPages}}</div><img src="{{loadThumb _id}}"></div></div>{{/each}}
+	{{#each books}}<div class="book" id="{{id}}" {{bookAttrs}}>
+		<div class="cover" {{coverAttrs}}>
+			<img src="{{loadThumb _id}}">
+			<button class="actions {{bookStatus}}"><div class="caret">&#9660;</div>{{order}}</button>
+			{{#if menuOpen}}
+			<div class="menu">
+				<div class="menuitem" data-action="markRead">Mark as read</div>
+				<div class="menuitem" data-action="markUnread">Mark as unread</div>
+				<div class="menuitem" data-action="markMassRead">Mark as read up to this issue</div>
+				<div class="menuitem" data-action="markMassUnread">Mark as unread from this issue</div>
+			</div>
+			{{/if}}
+		</div>
+	</div>{{/each}}
+
+	<!-- <div class="status {{bookStatus}}"></div><div class="pages">{{bookPages}}</div> -->
 
 </template>
 
