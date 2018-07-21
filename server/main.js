@@ -3,6 +3,7 @@ import { Jobs } from 'meteor/msavin:sjobs';
 import { EJSON } from 'meteor/ejson';
 
 var fs = require('fs');
+var path = require('path');
 var crypto = require('crypto');
 var temp = require('temp');
 var sprintf = require('sprintf-js').sprintf;
@@ -10,9 +11,16 @@ var execFile = require('child_process').execFile;
 
 var {msleep} = require('usleep');
 
+// Default paths on Linux
 var rarBin = '/usr/bin/unrar';
 var zipBin = '/usr/bin/unzip';
 var convertBin = '/usr/bin/convert';
+
+if (process.platform === 'win32') {
+	rarBin = Assets.absoluteFilePath('windows/unrar.exe');
+	zipBin = Assets.absoluteFilePath('windows/unzip.exe');
+	convertBin = Assets.absoluteFilePath('windows/convert.exe');
+}
 
 Books = new Mongo.Collection('books');
 Thumbs = new Mongo.Collection('thumbs');
@@ -40,11 +48,11 @@ UnpackSync = function(library, book) {
 	// Alway try both rar/zip but start with the more likely one.
 	if (book.type == 'cbr') {
 		try {
-			ExecFileSync(rarBin, ['e', '-o+', '-y', '-p-', '-inul', library + '/' + book.dir + '/' + book.file, tmpDir]);
+			ExecFileSync(rarBin, ['e', '-o+', '-y', '-p-', '-inul', library + path.sep + book.dir + path.sep + book.file, tmpDir]);
 		} catch (code) {
 			Logger(book.name, rarBin + " returned exit code " + code + ", trying ZIP");
 			try {
-				ExecFileSync(zipBin, ['-o', '-j', '-qq', library + '/' + book.dir + '/' + book.file, '-d', tmpDir]);
+				ExecFileSync(zipBin, ['-o', '-j', '-qq', library + path.sep + book.dir + path.sep + book.file, '-d', tmpDir]);
 			}
 			catch(e) {
 				Logger(book.name, zipBin + " returned exit code " + code);
@@ -53,11 +61,11 @@ UnpackSync = function(library, book) {
 	}
 	else if (book.type == 'cbz') {
 		try {
-			ExecFileSync(zipBin, ['-o', '-j', '-qq', library + '/' + book.dir + '/' + book.file, '-d', tmpDir]);
+			ExecFileSync(zipBin, ['-o', '-j', '-qq', library + path.sep + book.dir + path.sep + book.file, '-d', tmpDir]);
 		} catch (code) {
 			Logger(book.name, zipBin + " returned exit code " + code + ", trying RAR");
 			try {
-				ExecFileSync(rarBin, ['e', '-o+', '-y', '-p-', '-inul', library + '/' + book.dir + '/' + book.file, tmpDir]);
+				ExecFileSync(rarBin, ['e', '-o+', '-y', '-p-', '-inul', library + path.sep + book.dir + path.sep + book.file, tmpDir]);
 			}
 			catch(e) {
 				Logger(book.name, rarBin + " returned exit code " + code);
@@ -73,13 +81,13 @@ ScanDir = function(base, dir, books, dirs) {
 	dir = dir || '';
 	books = books || [];
 
-	dir = dir.replace(/^\/+/, '').replace(/\/+$/, '');
+	dir = dir.replace('^' + path.sep + '+', '').replace(path.sep + '+$', '');
 
 	dirs.push(dir);
 
-	ReaddirSync(base + '/' + dir).forEach((file) => {
-		var stats = fs.statSync(base + '/' + dir + '/' + file);
-		if (stats && stats.isDirectory()) ScanDir(base, dir + '/' + file, books, dirs);
+	ReaddirSync(base + path.sep + dir).forEach((file) => {
+		var stats = fs.statSync(base + path.sep + dir + path.sep + file);
+		if (stats && stats.isDirectory()) ScanDir(base, dir + path.sep + file, books, dirs);
 		else {
 			var m; m = file.match(new RegExp(/^(.+)\.(cbr|cbz)$/,'i'));
 			if (!m) return;
@@ -147,7 +155,7 @@ Router.route('page', {
 
 		var readPage = (path, page) => {
 			var data = null;
-			try { data = fs.readFileSync(path + '/' + page.file) } catch (e) { return null };
+			try { data = fs.readFileSync(path + path.sep + page.file) } catch (e) { return null };
 			return data;
 		};
 
@@ -178,7 +186,7 @@ Router.route('page', {
 			return fourOfour();
 		}
 
-		fs.unlinkSync(UnpackPaths[book._id] + '/' + page.file);
+		fs.unlinkSync(UnpackPaths[book._id] + path.sep + page.file);
 
 		this.response.writeHead(200, { 'Content-Type': 'image' });
 		this.response.write(data);
@@ -285,7 +293,7 @@ Jobs.register({
 				book.numPages = files.length;
 				book.pages = [];
 				files.forEach(file => {
-					var stats = fs.statSync(tmpDir + '/' + file);
+					var stats = fs.statSync(tmpDir + path.sep + file);
 					book.pages.push({
 						file: file,
 						size: stats.size
@@ -294,12 +302,12 @@ Jobs.register({
 				var out;
 				try {
 					out = ExecFileSync(convertBin, [
-						tmpDir + '/' + files[0],
+						tmpDir + path.sep + files[0],
 						'(',
 						'+clone',
 						'-resize', 'x600',
 						'-write',
-						tmpDir + '/_stacks-thumb.jpg',
+						tmpDir + path.sep + '_stacks-thumb.jpg',
 						')',
 						'-resize', 'x600',
 						'info:'
@@ -313,14 +321,14 @@ Jobs.register({
 				}
 				book.thumbAr = parseFloat(sprintf("%.3f", parseInt(s[1]) / 600));
 
-				var stats = fs.statSync(tmpDir + '/_stacks-thumb.jpg');
+				var stats = fs.statSync(tmpDir + path.sep + '_stacks-thumb.jpg');
 				if (!stats || !stats.size) {
 					Logger(book.name, "Unable to generate thubnail, aborting");
 					temp.cleanup();
 					return true;
 				}
 				var thumbDataURL = 'data:image/jpeg;base64,'
-					+ fs.readFileSync(tmpDir + '/_stacks-thumb.jpg', { encoding: 'base64'})
+					+ fs.readFileSync(tmpDir + path.sep + '_stacks-thumb.jpg', { encoding: 'base64'})
 					.replace((new RegExp(/[\/\+\=]/,'g')), function(s) { return sprintf('%%%02X', s.charCodeAt()) });
 
 				Thumbs.insert({
@@ -354,7 +362,7 @@ Jobs.register({
 			Books.update({ _id: { $nin: books.map(book => book._id) } }, { $set: { missing: true } }, {multi:true});
 			LibrarySubDirs = dirs;
 			this.success();
-			
+
 			Misc.update({ name: 'status' }, { $set : { scannerRunOnLibrary: settings.library } });
 		}
 
@@ -442,8 +450,8 @@ Meteor.startup(() => {
 
 					Logger("state", "Watching " + LibrarySubDirs.length + " directories");
 					LibrarySubDirs.forEach( dir => {
-						if (!Watchers[settings.library + '/' + dir]) {
-							Watchers[settings.library + '/' + dir] = fs.watch(settings.library + '/' + dir, {}, Meteor.bindEnvironment((type,filename) => { watchListener(type, filename) }));
+						if (!Watchers[settings.library + path.sep + dir]) {
+							Watchers[settings.library + path.sep + dir] = fs.watch(settings.library + path.sep + dir, {}, Meteor.bindEnvironment((type,filename) => { watchListener(type, filename) }));
 						}
 					});
 
@@ -470,8 +478,7 @@ Meteor.startup(() => {
 		},
 
 		setSettings: function(settings) {
-			if (settings.library) settings.library = settings.library.replace(/\/+$/, '');
-			if (!settings.library.match(/^\//)) settings.library = false;
+			if (settings.library) settings.library = settings.library.replace(path.sep + '+$', '');
 
 			if (!settings.library) delete settings['library'];
 			Misc.update({ name:'settings' }, { $set : settings });
