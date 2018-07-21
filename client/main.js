@@ -260,12 +260,43 @@ Template.stacks.helpers({
 
     stacks: function() {
         var stackMap = {};
-        Books.find({ missing: false }).forEach(book => { stackMap[book.stackId] = book.stackName });
+        Books.find({ missing: false }).forEach(book => {
+            
+            if (!stackMap[book.stackId])
+                stackMap[book.stackId] = {
+                    id  : book.stackId,
+                    name: book.stackName,
+                    hasUnread: 0,
+                    hasNew: 0
+                };
 
-        return Object.keys(stackMap).sort().map(stackId => { return {
-            name: stackMap[stackId],
-              id: stackId
-        }});
+            if (book.isRead) return;
+
+            var activePage = parseInt(book.activePage);
+            var maxPage = parseInt(book.numPages);
+            var mtime = parseInt(book.mtime);
+
+            // More than 2/3 read is "read".
+            if (activePage && activePage > (maxPage * 2/3)) return;
+
+            stackMap[book.stackId].hasUnread++;
+
+            if (mtime > (Date.now() - (1000 * 14 * 86400))) stackMap[book.stackId].hasNew++;
+
+        });
+
+        return Object.values(stackMap).sort((a, b) => {
+            if (!a.hasNew &&  b.hasNew) return 1;
+            if ( a.hasNew && !b.hasNew) return -1;
+
+            if (!a.hasUnread &&  b.hasUnread) return 1;
+            if ( a.hasUnread && !b.hasUnread) return -1;
+
+            if (a.id > b.id) return 1;
+            if (a.id < b.id) return -1;
+
+            return 0;
+        });
     },
 
     noBooks: function() {
@@ -382,15 +413,25 @@ Template.books.helpers({
 
         var activePage = parseInt(this.activePage);
         var maxPage = parseInt(this.numPages);
-        var mtime = parseInt(this.mtime);
 
         // More than 2/3 read is "read".
         if (activePage && activePage > (maxPage * 2/3)) return '';
 
         if (activePage) return 'status-started';
-        if (mtime > (Date.now() - (1000 * 14 * 86400))) return 'status-new';
-
+        
         return 'status-unread';
+    },
+
+    bookIsNew: function() {
+        if (this.isRead) return false;
+
+        var activePage = parseInt(this.activePage);
+        var mtime = parseInt(this.mtime);
+
+        if (activePage) return false;
+        if (mtime > (Date.now() - (1000 * 14 * 86400))) return true;
+
+        return false;
     },
 
     bookPages: function() {
@@ -451,12 +492,17 @@ Template.books.events({
     }
 });
 
+CursorVisible = false;
 CursorHideTimeout = false;
 Template.viewer.events({
     'mousemove': function() {
-        $('.layer#viewer').css('cursor','auto');
+        // Avoid slamming the DOM
+        if (!CursorVisible) {
+            $('.layer#viewer').css('cursor','auto');
+            CursorVisible = true;
+        }
         if (CursorHideTimeout) Meteor.clearTimeout(CursorHideTimeout);
-        CursorHideTimeout = Meteor.setTimeout(function() { $('.layer#viewer').css('cursor','none') }, 1000);
+        CursorHideTimeout = Meteor.setTimeout(function() { $('.layer#viewer').css('cursor','none'); CursorVisible = false; }, 1000);
     }
 });
 

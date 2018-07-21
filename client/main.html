@@ -16,7 +16,10 @@
 	{{#if dataReady}}
 		{{> layers}}
 		<div id="message"></div>
+	{{else}}
+		<div id="loading">Loading Library ...</div>
 	{{/if}}
+
 </body>
 
 <template name="layers">
@@ -43,7 +46,7 @@
 
 	<div class="title">Stacks</div>
 	{{#each stacks}}<div class="stack" id="{{id}}" {{stackAttrs}}>
-		{{#each stackBooks id}}<div class="cover" {{coverAttrs}}>{{#unless noStackCover}}<img src="{{loadThumb _id}}">{{/unless}}</div>{{/each}}
+		{{#each stackBooks id}}<div class="cover" {{coverAttrs}}>{{#unless noStackCover}}<img src="{{loadThumb _id}}">{{#unless @index}}{{#if ../hasUnread}}<div class="unread">{{../hasUnread}} unread</div>{{/if}}{{#if ../hasNew}}<div class="new">New!</div>{{/if}}{{/unless}}{{/unless}}</div>{{/each}}
 		<div class="name">{{name}}</div>
 	</div>{{else}}
 		{{#if noBooks}}<div class="no-stacks">No books found, check library directory in settings</div>{{/if}}
@@ -57,6 +60,7 @@
 	{{#each books}}<div class="book" id="{{id}}" {{bookAttrs}}>
 		<div class="cover" {{coverAttrs}}>
 			<img src="{{loadThumb _id}}">
+			{{#if bookIsNew}}<div class="badge-new"></div>{{/if}}
 			<button class="actions {{bookStatus}}"><div class="caret">&#9660;</div>{{order}}</button>
 			{{#if menuOpen}}
 			<div class="menu">
