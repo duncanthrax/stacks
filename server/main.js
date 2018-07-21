@@ -155,7 +155,13 @@ Router.route('page', {
 
 		var readPage = (path, page) => {
 			var data = null;
-			try { data = fs.readFileSync(path + path.sep + page.file) } catch (e) { return null };
+			try {
+				data = fs.readFileSync(path + path.sep + page.file)
+			}
+			catch (e) {
+				Logger("readPage", "Exception while reading page file", e);
+				return null;
+			};
 			return data;
 		};
 
