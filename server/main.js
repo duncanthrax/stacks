@@ -153,10 +153,10 @@ Router.route('page', {
 			return true;
 		};
 
-		var readPage = (path, page) => {
+		var readPage = (unpackPath, page) => {
 			var data = null;
 			try {
-				data = fs.readFileSync(path + path.sep + page.file)
+				data = fs.readFileSync(unpackPath + path.sep + page.file)
 			}
 			catch (e) {
 				Logger("readPage", "Exception while reading page file", e);
@@ -442,9 +442,9 @@ Meteor.startup(() => {
 				if (settings.library === status.scannerRunOnLibrary) {
 					
 					// Delete old watchers
-					Object.keys(Watchers).forEach(path => {
-						if (Watchers[path]) Watchers[path].close();
-						Watchers[path] = null; delete Watchers[path];
+					Object.keys(Watchers).forEach(directory => {
+						if (Watchers[directory]) Watchers[directory].close();
+						Watchers[directory] = null; delete Watchers[directory];
 					});
 
 					// Set up new watchers
