@@ -345,8 +345,6 @@ Jobs.register({
 			AbortScanLibJob = true;
 		}
 
-		Misc.update({ name: 'status' }, { $set : { scannerStatus : false } });
-
 		if (AbortScanLibJob) {
 			Logger("scanLib", "Job aborted");
 			this.failure();
@@ -355,10 +353,12 @@ Jobs.register({
 			// Mark missing books as missing
 			Books.update({ _id: { $nin: books.map(book => book._id) } }, { $set: { missing: true } }, {multi:true});
 			LibrarySubDirs = dirs;
-			Misc.update({ name: 'status' }, { $set : { scannerRunOnLibrary: settings.library } });
 			this.success();
+			
+			Misc.update({ name: 'status' }, { $set : { scannerRunOnLibrary: settings.library } });
 		}
 
+		Misc.update({ name: 'status' }, { $set : { scannerStatus : false } });
 		AbortScanLibJob = false;
 		ScanLibJobId = false;
 	}
