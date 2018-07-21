@@ -178,6 +178,7 @@ Router.route('page', {
 		else {
 			Logger(book.name, "Download request for page " + pageNum + ", unpacking");
 			UnpackPaths[book._id] = UnpackSync(settings.library, book);
+			Logger(book.name, "Unpacked at " + UnpackPaths[book._id]);
 			data = readPage(UnpackPaths[book._id], page);
 		}
 
