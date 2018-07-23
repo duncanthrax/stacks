@@ -11,6 +11,10 @@ var execFile = require('child_process').execFile;
 
 var {msleep} = require('usleep');
 
+RegExp.quote = function(str) {
+	return (str+'').replace(/[.?*+^$[\]\\(){}|-]/g, "\\$&");
+};
+
 // Default paths on Linux
 var rarBin = '/usr/bin/unrar';
 var zipBin = '/usr/bin/unzip';
@@ -259,6 +263,10 @@ Jobs.register({
 			NukeLibraryRequested = false;
 		}
 
+		var unreadRx = false;
+		if (settings.unreadMatch)
+			unreadRx = new RegExp(RegExp.quote(settings.unreadMatch), 'i');
+
 		var dirs = [];
 		try {
 			var books = ScanDir(settings.library, false, false, dirs);
@@ -345,7 +353,8 @@ Jobs.register({
 
 				temp.cleanup();
 
-				book.isRead = markAsRead;
+				if (unreadRx) book.isRead = book.dir.match(unreadRx) ? false : true;
+				else book.isRead = markAsRead;
 
 				//Logger("scanLib", "new book", book);
 				Books.insert(book);

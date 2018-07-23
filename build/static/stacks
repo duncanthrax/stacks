@@ -18,7 +18,7 @@ run_meteor() {
     export MONGO_URL="mongodb://127.0.0.1:2$STACKS_PORT"
     export ROOT_URL="http://127.0.0.1:$STACKS_PORT"
     export PORT=$STACKS_PORT
-    exec -a node -- ../node/bin/node main.js --scripts-prepend-node-path >/dev/null 2>/dev/null
+    exec -a node -- ../node/bin/node main.js --scripts-prepend-node-path
 }
 
 cd $(dirname $(realpath $0))/..
