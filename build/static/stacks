@@ -1,0 +1,52 @@
+#!/bin/bash
+
+pushd () {
+    command pushd "$@" > /dev/null
+}
+
+popd () {
+    command popd "$@" > /dev/null
+}
+
+run_mongod() {
+    mkdir db >/dev/null 2>/dev/null
+    exec -a mongod -- bin/mongod --quiet --port 2$STACKS_PORT --dbpath /var/lib/stacks/db >/dev/null 2>/dev/null
+}
+
+run_meteor() {
+    cd app
+    export MONGO_URL="mongodb://127.0.0.1:2$STACKS_PORT"
+    export ROOT_URL="http://127.0.0.1:$STACKS_PORT"
+    export PORT=$STACKS_PORT
+    exec -a node -- ../node/bin/node main.js --scripts-prepend-node-path >/dev/null 2>/dev/null
+}
+
+cd $(dirname $(realpath $0))/..
+
+run_mongod &
+MONGOD_PID=$!
+
+while : ; do
+    timeout 1 bash -c "cat < /dev/null > /dev/tcp/127.0.0.1/2$STACKS_PORT" >/dev/null 2>/dev/null
+    [[ "$?" != "0" ]] || break
+    sleep 1
+done
+
+run_meteor &
+METEOR_PID=$!
+
+trap terminate TERM INT CHLD
+
+terminate() {
+    trap - TERM INT CHLD
+    echo "Stacks quitting"
+    kill -n 15 $MONGOD_PID >/dev/null 2>/dev/null
+    kill -n 15 $METEOR_PID >/dev/null 2>/dev/null
+    exit
+}
+
+echo "Stacks started (mongod pid: $MONGOD_PID, node pid: $METEOR_PID)"
+
+while :; do sleep 60; done
+
+terminate

@@ -1,0 +1,16 @@
+[Unit]
+Description=Stacks Comic Library renderer and reader
+After=network.target
+[Service]
+Environment=STACKS_PORT=4472
+#ExecStartPre=
+ExecStart=/usr/lib/stacks/bin/stacks
+Type=simple
+User=stacks
+Group=stacks
+Restart=on-failure
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
+[Install]
+WantedBy=multi-user.target

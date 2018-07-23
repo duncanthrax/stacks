@@ -1,0 +1,32 @@
+#!/bin/sh
+
+set -e
+
+action=$1
+version=$2
+
+if [ "${DEBCONF_RECONFIGURE}" = "1" ]; then
+    action=reconfigure
+fi
+
+if [ "x$version" = "x" ] || [ "$action" = "reconfigure" ]; then
+
+    if ! getent passwd "stacks" >/dev/null; then
+     adduser --quiet --system --shell /usr/sbin/nologin --home /var/lib/stacks --group "stacks"
+    fi
+
+    if ! getent group "stacks" >/dev/null; then
+     groupadd "stacks"
+     usermod -a -G "stacks" "stacks"
+    fi
+
+    if [ ! -d /var/lib/stacks/db ]
+    then
+     mkdir -p /var/lib/stacks/db
+     chown -R stacks:stacks /var/lib/stacks
+    fi
+fi
+
+systemctl enable stacks.service
+
+exit 0
