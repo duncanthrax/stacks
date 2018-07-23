@@ -29,7 +29,7 @@ cat >$PACKAGE_NAME/DEBIAN/control <<END
 Package: $STACKS_NAME
 Version: $VERSION_STRING
 Architecture: amd64
-Depends: unrar unzip imagemagick bash
+Depends: unrar, unzip, imagemagick, bash
 Maintainer: Tom Kistner <tom@kistner.nu>
 Description: Stacks
   CBR comic library renderer and reader
@@ -37,6 +37,7 @@ Description: Stacks
 END
 
 cp static/postinst $PACKAGE_NAME/DEBIAN/
+cp static/prerm $PACKAGE_NAME/DEBIAN/
 cp static/stacks.service $PACKAGE_NAME/lib/systemd/system/
 cp static/stacks $PACKAGE_NAME/usr/lib/stacks/bin/
 
