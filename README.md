@@ -25,5 +25,15 @@ sudo service stacks start
 
 Point your browser to ```http://<IP>:4472```. On successful load, you should see your still empty library. Click the settings (wrench) icon in the top right corner. Specify the path to your comic library. Click "Apply and redo initial scan" to let Stacks read your comic library.
 
+## Using stacks
+Navigation on the stacks and book screens should be more or less obvious. The reader can either be controlled with mouse buttons and scroll wheel (on desktops) or by tapping screen edges and corners (tablets/touch screens).
+
+### Reader mouse controls (for desktops)
+
+![](doc/mouse.png)
+
+### Reader touch controls
+
+
 ## Adding authentication and encryption
 Stacks does not come with user authentication and SSL capabilities, but one or both can easily be added by fronting Stacks with nginx.
