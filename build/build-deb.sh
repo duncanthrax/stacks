@@ -29,12 +29,24 @@ cat >$PACKAGE_NAME/DEBIAN/control <<END
 Package: $STACKS_NAME
 Version: $VERSION_STRING
 Architecture: amd64
-Depends: unrar, unzip, imagemagick, bash
 Maintainer: Tom Kistner <tom@kistner.nu>
+Depends: unrar, unzip, imagemagick, bash
+Section: main
+Priority: optional
 Description: Stacks
   CBR comic library renderer and reader
   https://github.com/duncanthrax/stacks
 END
+
+# DATE=$(date -R)
+
+# cat >$PACKAGE_NAME/DEBIAN/changelog <<END
+# $STACKS_NAME ($VERSION_STRING) stretch; urgency=medium
+
+#  * Version $VERSION_STRING
+
+# -- Tom Kistner <tom@kistner.nu>  $DATE
+# END
 
 cp static/postinst $PACKAGE_NAME/DEBIAN/
 cp static/prerm $PACKAGE_NAME/DEBIAN/
@@ -68,4 +80,4 @@ rm -rf $STACKS_MONGODB
 
 echo ":: Building DEB package"
 sudo chown -R 0:0 $PACKAGE_NAME
-dpkg-deb --build $PACKAGE_NAME
+dpkg-deb --no-uniform-compression --build $PACKAGE_NAME
