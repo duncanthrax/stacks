@@ -29,11 +29,10 @@ Point your browser to ```http://<IP>:4472```. On successful load, you should see
 Navigation on the stacks and book screens should be more or less obvious. The reader can either be controlled with mouse buttons and scroll wheel (on desktops) or by tapping screen edges and corners (tablets/touch screens).
 
 ### Reader mouse controls (for desktops)
-
 ![](doc/mouse.png)
 
 ### Reader touch controls
-
+![](doc/touch.png)
 
 ## Adding authentication and encryption
 Stacks does not come with user authentication and SSL capabilities, but one or both can easily be added by fronting Stacks with nginx.
