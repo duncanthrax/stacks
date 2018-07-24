@@ -9,7 +9,7 @@ popd () {
 }
 
 check_bintray () {
-	RES=$(curl -s -o /dev/null -w "%{http_code}" "https://dl.bintray.com/duncanthrax/deb/pool/s/stacks/$PACKAGE_NAME.deb")
+	RES=$(curl -L -s -o /dev/null -w "%{http_code}" "https://dl.bintray.com/duncanthrax/deb/pool/s/stacks/$PACKAGE_NAME.deb")
 	echo $RES
 }
 

@@ -231,7 +231,6 @@ StartScanLib = function() {
 
 	ScanLibJobId = Jobs.run('scanLib')._id;
 	Logger("scanLib", "Scheduled new job " + ScanLibJobId);
-	Jobs.start();
 	Jobs.execute(ScanLibJobId);
 };
 
