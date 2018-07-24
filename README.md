@@ -29,9 +29,11 @@ Point your browser to ```http://<IP>:4472```. On successful load, you should see
 Navigation on the stacks and book screens should be more or less obvious. The reader can either be controlled with mouse buttons and scroll wheel (on desktops) or by tapping screen edges and corners (tablets/touch screens).
 
 ### Reader mouse controls (for desktops)
+Simple mouse controls allow for single-handed, reclined reading:
 ![](doc/mouse.png)
 
 ### Reader touch controls
+The touch controls are normally invisible, shown here for illustration purposes:
 ![](doc/touch.png)
 
 ## Adding authentication and encryption
