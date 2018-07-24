@@ -18,10 +18,10 @@ Update, install and start. The DEB package is called "comic-stacks" because "sta
 ```
 sudo apt-get update
 sudo apt-get install comic-stacks
-service stacks start
+sudo service stacks start
 ```
 
-Finally, point your browser to ```http://<IP>:4472```.
+Point your browser to ```http://<IP>:4472```. On successful load, you should see your still empty library. Click the settings (wrench) icon in the top right corner. Specify the path to your comic library. Click "Apply and redo initial scan" to let Stacks read your comic library.
 
 ## Adding authentication and encryption
 Stacks does not come with user authentication and SSL capabilities, but one or both can easily be added by fronting Stacks with nginx.
