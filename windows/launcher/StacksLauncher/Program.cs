@@ -10,6 +10,9 @@ using System.Windows.Forms;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
+using Microsoft.Win32;
+
+
 
 namespace StacksLauncher
 {
@@ -32,21 +35,31 @@ namespace StacksLauncher
         public Form1()
         {
             sysTrayMenu = new ContextMenu();
-            sysTrayMenu.MenuItems.Add("Exit", OnExit); 
+            sysTrayMenu.MenuItems.Add("Launch Stacks in Browser", BrowserLaunch);
+            sysTrayMenu.MenuItems.Add("Exit Stacks", OnExit); 
             sysTrayIcon = new NotifyIcon();
             sysTrayIcon.Text = "Stacks";
-            sysTrayIcon.Icon = new Icon(SystemIcons.Shield, 40, 40);
+            sysTrayIcon.Icon = Properties.Resources.favicon;
             sysTrayIcon.ContextMenu = sysTrayMenu;
             sysTrayIcon.Visible = true;
 
             mongo = LaunchMongo();
 
             // Wait for TCP connectivity ...
-            TcpClient tcpClient = new TcpClient();
-            do { tcpClient.Connect("127.0.0.1", 24472); Thread.Sleep(1000); } while (!tcpClient.Connected);
-            tcpClient.Close();
+            TcpClient mongoClient = new TcpClient();
+            do { mongoClient.Connect("127.0.0.1", 24472); Thread.Sleep(1000); } while (!mongoClient.Connected);
+            mongoClient.Close();
 
             meteor = LaunchMeteor();
+
+            string[] args = Environment.GetCommandLineArgs();
+            if (args.Length < 2 || args[1] != "nobrowser" )
+            {
+                TcpClient meteorClient = new TcpClient();
+                do { meteorClient.Connect("127.0.0.1", 4472); Thread.Sleep(1000); } while (!meteorClient.Connected);
+                meteorClient.Close();
+                System.Diagnostics.Process.Start("http://127.0.0.1:4472");
+            }
         }
 
         protected override void OnLoad(EventArgs e)
@@ -68,6 +81,11 @@ namespace StacksLauncher
             Application.Exit();
         }
 
+        private void BrowserLaunch(object sender, EventArgs e)
+        {
+            System.Diagnostics.Process.Start("http://127.0.0.1:4472");
+        } 
+
         static Process LaunchMongo()
         {
             ProcessStartInfo startInfo = new ProcessStartInfo();
@@ -77,7 +95,7 @@ namespace StacksLauncher
             startInfo.WindowStyle = ProcessWindowStyle.Hidden;
             //string dbDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "stacks");
             //startInfo.Arguments = "--quiet --port 24472 --dbpath " + dbDir;
-            startInfo.Arguments = "--quiet --port 24472 --dbpath ..\\db";
+            startInfo.Arguments = "--quiet --port 24472 --dbpath db";
             return Process.Start(startInfo);
         }
 
@@ -86,8 +104,8 @@ namespace StacksLauncher
             ProcessStartInfo startInfo = new ProcessStartInfo();
             startInfo.CreateNoWindow = true;
             startInfo.UseShellExecute = false;
-            startInfo.FileName = "..\\node\\node.exe";
-            startInfo.WorkingDirectory = "..\\meteor";
+            startInfo.FileName = "node.exe";
+            startInfo.WorkingDirectory = "meteor";
             startInfo.WindowStyle = ProcessWindowStyle.Hidden;
             startInfo.EnvironmentVariables["MONGO_URL"] = "mongodb://127.0.0.1:24472";
             startInfo.EnvironmentVariables["ROOT_URL"] = "http://127.0.0.1:4472";
