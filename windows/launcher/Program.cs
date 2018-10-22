@@ -47,7 +47,16 @@ namespace StacksLauncher
 
             // Wait for TCP connectivity ...
             TcpClient mongoClient = new TcpClient();
-            do { mongoClient.Connect("127.0.0.1", 24472); Thread.Sleep(1000); } while (!mongoClient.Connected);
+            int retries = 10;
+            do { mongoClient.Connect("127.0.0.1", 24472); Thread.Sleep(1000); retries--; } while (retries > 0 && !mongoClient.Connected);
+            if (!mongoClient.Connected)
+            {
+                mongo.Kill();
+                mongo.WaitForExit();
+                MessageBox.Show("Timeout waiting for MongoDB to start", "Stacks Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                sysTrayIcon.Visible = false;
+                Application.Exit();
+            }
             mongoClient.Close();
 
             meteor = LaunchMeteor();
@@ -56,9 +65,20 @@ namespace StacksLauncher
             if (args.Length < 2 || args[1] != "nobrowser" )
             {
                 TcpClient meteorClient = new TcpClient();
-                do { meteorClient.Connect("127.0.0.1", 4472); Thread.Sleep(1000); } while (!meteorClient.Connected);
+                retries = 10;
+                do { meteorClient.Connect("127.0.0.1", 4472); Thread.Sleep(1000); retries--; } while (retries > 0 && !meteorClient.Connected);
+                if (!meteorClient.Connected)
+                {
+                    mongo.Kill();
+                    mongo.WaitForExit();
+                    meteor.Kill();
+                    meteor.WaitForExit();
+                    MessageBox.Show("Timeout waiting for Meteor to start", "Stacks Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    sysTrayIcon.Visible = false;
+                    Application.Exit();
+                }
                 meteorClient.Close();
-                System.Diagnostics.Process.Start("http://127.0.0.1:4472");
+                BrowserLaunch(null,null);
             }
         }
 

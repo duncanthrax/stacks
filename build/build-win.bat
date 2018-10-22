@@ -11,6 +11,8 @@ CALL demeteorizer -o ..\build\winbuild
 cd ..\build\winbuild
 rename bundle meteor
 mkdir db
+echo MongoDB > db\MongoDB
+
 cd meteor\programs\server
 
 CALL npm install
