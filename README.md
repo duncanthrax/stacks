@@ -1,5 +1,5 @@
 # Stacks - CBR comic library renderer and reader
-Stacks is a reader for digital comics in CBR/CBZ format. It runs as a fullscreen web application on any modern device, preferrably tablets or laptops. The server portion can be deployed on Linux (a Windows version is in preparation).
+Stacks is a reader for digital comics in CBR/CBZ format. It runs as a fullscreen browser-based web application on any modern device, preferrably tablets or laptops. The server can be run on Linux or Windows.
 
 ![](doc/screenshot-1.png)
 
