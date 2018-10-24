@@ -3,6 +3,12 @@ Stacks is a reader for digital comics in CBR/CBZ format. It runs as a fullscreen
 
 ![](doc/screenshot-1.png)
 
+## Install on Windows
+* Download the installer here: https://dl.bintray.com/duncanthrax/windows/:StacksInstaller.exe
+* Run the installer.
+* Run stacks from the final installer page or the Start Menu. It should open a browser window.
+* In Settings, provide the path to your Comics library. Use standard Windows drive/path notation (e.g. "X:\Files\Comics").
+
 ## Install on Linux
 DEBs for recent systemd-based Debian variants (including Ubuntu) on amd64 are available from a BinTray repo.
 
