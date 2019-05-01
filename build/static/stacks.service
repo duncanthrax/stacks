@@ -2,8 +2,7 @@
 Description=Stacks Comic Library renderer and reader
 After=network.target
 [Service]
-Environment=STACKS_PORT=4472
-Environment=STACKS_EXTURL=
+EnvironmentFile=-/etc/default/stacks
 #ExecStartPre=
 ExecStart=/usr/lib/stacks/bin/stacks
 Type=simple

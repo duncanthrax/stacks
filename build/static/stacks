@@ -1,5 +1,9 @@
 #!/bin/bash
 
+if [[ "$STACKS_PORT" == "" ]]; then
+  STACKS_PORT=4472
+fi
+
 pushd () {
     command pushd "$@" > /dev/null
 }

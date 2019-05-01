@@ -1,0 +1,9 @@
+# Defaults for the Stacks comic library.
+
+# Port for the application. Default is 4472.
+#STACKS_PORT=4472
+
+# External URL. Set this to the base URL used in the
+# browser when fronting stacks with a reverse proxy
+# like apache or nginx.
+#STACKS_EXTURL=https://my.server.com/stacks/

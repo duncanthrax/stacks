@@ -34,7 +34,11 @@ sudo rm -rf $PACKAGE_NAME
 mkdir -p $PACKAGE_NAME/DEBIAN
 mkdir -p $PACKAGE_NAME/usr/lib/stacks/bin
 mkdir -p $PACKAGE_NAME/lib/systemd/system
+mkdir -p $PACKAGE_NAME/etc/default
 
+cat >$PACKAGE_NAME/DEBIAN/conffiles <<END
+/etc/default/stacks
+END
 
 cat >$PACKAGE_NAME/DEBIAN/control <<END
 Package: $STACKS_NAME
@@ -63,6 +67,7 @@ cp static/postinst $PACKAGE_NAME/DEBIAN/
 cp static/prerm $PACKAGE_NAME/DEBIAN/
 cp static/stacks.service $PACKAGE_NAME/lib/systemd/system/
 cp static/stacks $PACKAGE_NAME/usr/lib/stacks/bin/
+cp static/default $PACKAGE_NAME/etc/default/stacks
 
 pushd ../meteor
 meteor build ../build/$PACKAGE_NAME/usr/lib/stacks --directory
