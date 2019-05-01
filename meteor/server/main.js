@@ -6,8 +6,6 @@ var path = require('path');
 var temp = require('temp');
 var child_process = require('child_process');
 
-var {msleep} = require('usleep');
-
 RegExp.quote = function(str) {
 	return (str+'').replace(/[.?*+^$[\]\\(){}|-]/g, "\\$&");
 };

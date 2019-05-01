@@ -15,8 +15,12 @@ run_mongod() {
 
 run_meteor() {
     cd app
-    export MONGO_URL="mongodb://127.0.0.1:2$STACKS_PORT"
-    export ROOT_URL="http://127.0.0.1:$STACKS_PORT"
+    export MONGO_URL="mongodb://127.0.0.1:2$STACKS_PORT/meteor"
+    if [[ "$STACKS_EXTURL" != "" ]]; then
+      export ROOT_URL=$STACKS_EXTURL
+    else
+      export ROOT_URL="http://127.0.0.1:$STACKS_PORT"
+    fi
     export PORT=$STACKS_PORT
     exec -a node -- ../node/bin/node main.js --scripts-prepend-node-path
 }
@@ -35,10 +39,10 @@ done
 run_meteor &
 METEOR_PID=$!
 
-trap terminate TERM INT CHLD
+trap terminate TERM INT
 
 terminate() {
-    trap - TERM INT CHLD
+    trap - TERM INT
     echo "Stacks quitting"
     kill -n 15 $MONGOD_PID >/dev/null 2>/dev/null
     kill -n 15 $METEOR_PID >/dev/null 2>/dev/null

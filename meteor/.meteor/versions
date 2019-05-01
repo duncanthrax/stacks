@@ -56,7 +56,6 @@ modules-runtime@0.10.0
 mongo@1.5.0
 mongo-dev-server@1.1.0
 mongo-id@1.0.7
-msavin:sjobs@3.0.6
 npm-mongo@3.0.7
 observe-sequence@1.0.16
 ordered-dict@1.1.0

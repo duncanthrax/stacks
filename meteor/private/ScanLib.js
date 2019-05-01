@@ -1,6 +1,14 @@
+const path    = require('path');
+
+module.paths.push(
+    path.resolve(__dirname, '..', '..', 'npm', 'node_modules')
+);
+module.paths.push(
+    path.resolve(__dirname, '..', '..', 'node_modules')
+);
+
 const client  = require('mongodb').MongoClient;
 const temp    = require('temp');
-const path    = require('path');
 const fs      = require('fs');
 const sprintf = require('sprintf-js').sprintf;
 const crypto  = require('crypto');
@@ -117,7 +125,7 @@ ScanLib = async function() {
 
     var settings = await cfg.colMisc.findOne({ name: 'settings' });
     Logger("scanner", "Settings", settings);
-    if (!settings.library || AbortScanLib) {
+    if (!settings || !settings.library || AbortScanLib) {
         Logger("scanner", "Aborted on startup");
         return;
     }
