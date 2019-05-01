@@ -10,6 +10,7 @@
     "child_process": "^1.0.2",
     "localforage": "^1.7.2",
     "meteor-node-stubs": "^0.4.1",
+    "mongodb": "^3.2.3",
     "sprintf-js": "^1.1.1",
     "temp": "^0.8.3",
     "usleep": "^1.0.3"

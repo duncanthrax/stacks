@@ -1,13 +1,10 @@
 import { Meteor } from 'meteor/meteor';
-import { Jobs } from 'meteor/msavin:sjobs';
 import { EJSON } from 'meteor/ejson';
 
 var fs = require('fs');
 var path = require('path');
-var crypto = require('crypto');
 var temp = require('temp');
-var sprintf = require('sprintf-js').sprintf;
-var execFile = require('child_process').execFile;
+var child_process = require('child_process');
 
 var {msleep} = require('usleep');
 
@@ -31,24 +28,22 @@ Thumbs = new Mongo.Collection('thumbs');
 Misc = new Mongo.Collection('misc');
 
 UnpackPaths = {};
-Watchers = {};
-LibrarySubDirs = [];
+NukeLibraryRequested = false;
 
 Logger = function(ctx, msg, obj) {
-	if (obj) console.log("["+ctx+"]",msg,obj);
-	else     console.log("["+ctx+"]",msg);
+	if (obj) console.log(`[${ctx}]`, msg, obj);
+	else     console.log(`[${ctx}]`, msg);
 };
 
-ReaddirSync = Meteor.wrapAsync(function(dir, cb) { fs.readdir(dir, cb) });
 ExecFileSync = Meteor.wrapAsync(function(cmd, opts, cb) {
-	execFile(cmd, opts, function(error, stdout, stderr) {
+	child_process.execFile(cmd, opts, function(error, stdout, stderr) {
 		cb(error ? error.code : null, stdout.replace(new RegExp(/\s+/, 'g'), ' '));
 	});
 });
 
 UnpackSync = function(library, book) {
 	var tmpDir = temp.mkdirSync('stacks-tmp-book-' + book._id);
-	
+
 	// Alway try both rar/zip but start with the more likely one.
 	if (book.type == 'cbr') {
 		try {
@@ -80,74 +75,9 @@ UnpackSync = function(library, book) {
 	return tmpDir;
 };
 
-
-ScanDir = function(base, dir, books, dirs) {
-	dir = dir || '';
-	books = books || [];
-
-	dir = dir.replace('^' + path.sep + '+', '').replace(path.sep + '+$', '');
-
-	dirs.push(dir);
-
-	ReaddirSync(base + path.sep + dir).forEach((file) => {
-		var stats = fs.statSync(base + path.sep + dir + path.sep + file);
-		if (stats && stats.isDirectory()) ScanDir(base, dir + path.sep + file, books, dirs);
-		else {
-			var m; m = file.match(new RegExp(/^(.+)\.(cbr|cbz)$/,'i'));
-			if (!m) return;
-
-			var name = m[1];
-			var type = m[2].toLowerCase();
-
-			name = name.
-				// Treat dots as whitespace
-				replace(new RegExp(/\./,'g'), ' ').
-				// Remove trailing bracketed items
-				replace(new RegExp(/\s*\(.+\)\s*$/,'g'), '').
-				// Collapse whitespace
-				replace(new RegExp(/\s+/,'g'), ' ');
-
-			// <title> <order>
-			var     m = name.match(new RegExp(/^(.+)\s+([0-9a-d#]+)$/,'i'));
-			// <title> <order> - <book title>
-			if (!m) m = name.match(new RegExp(/^(.+)\s+([0-9a-d#]+)\s+\-\s.+$/,'i'));
-			// <title>
-			if (!m) m = name.match(new RegExp(/^(.+)$/,'i'));
-
-			if (!m) {
-				Logger("scanDir", "Unable to parse filename '" + name + "'");
-				return;
-			}
-
-			var stackName = m[1];
-			var order = m[2] || '';
-			order = order.replace(new RegExp(/\#/,'g'), '');
-
-			var id = crypto.createHash('sha1').update(stats.mtime.toString()).update(name.toLowerCase().replace(new RegExp(/\s/,'g'), '')).digest('hex');
-			var stackId = stackName.toLowerCase().replace(new RegExp(/[^a-z0-9]/,'g'), '');
-
-			books.push({
-					  _id: id,
-					 name: name,
-				  stackId: stackId,
-				stackName: stackName,
-				    order: order ? sprintf("#%05s", order) : 'Single',
-				     type: type,
-				      dir: dir,
-				     file: file,
-				     size: stats.size,
-				    mtime: Math.floor(stats.mtimeMs),
-				  missing: false
-			});
-		}
-	});
-
-	return books;
-};
-
 Router.route('page', {
 	name: 'page',
-	path: /^\/page\/(.+?)\/(.+?)$/,
+	path: /page\/(.+?)\/(.+?)$/,
 	where: 'server',
 	action: function() {
 
@@ -205,195 +135,69 @@ Router.route('page', {
 	}
 });
 
-ScanLibJobId = false;
-PendingJobTimeout = false;
-AbortScanLibJob = false;
-NukeLibraryRequested = false;
+ScannerProcess = false;
+Watchers = {};
 StartScanLib = function() {
 
-	if (PendingJobTimeout) return;
+	if (ScannerProcess) return;
 
-	if (ScanLibJobId) {
-		Logger("scanLib", "Job already scheduled or running, aborting");
-		AbortScanLibJob = true;
+	// Spawn scanner process
+	ScannerProcess = child_process.fork(Assets.absoluteFilePath('ScanLib.js'));
 
-		var checkJob; checkJob = () => {
-			if (!ScanLibJobId) {
-				PendingJobTimeout = false;
-				Meteor.setTimeout(StartScanLib, 10);
-				return;
-			}
-			PendingJobTimeout = Meteor.setTimeout(checkJob, 1000);
-		}; checkJob();
+	Misc.update({ name: 'status' }, { $set : { scannerStatus : 'active' } });
 
-		return;
-	}
+	ScannerProcess.on('exit', Meteor.bindEnvironment((code) => {
+		Logger("StartScanLib", `Scanner exited with code ${code}`);
+		Misc.update({ name: 'status' }, { $set : { scannerStatus : false } });
+		ScannerProcess = false;
+	}));
 
-	ScanLibJobId = Jobs.run('scanLib')._id;
-	Logger("scanLib", "Scheduled new job " + ScanLibJobId);
-	Jobs.execute(ScanLibJobId);
-};
+	ScannerProcess.on('message', Meteor.bindEnvironment((msg) => {
+		if (msg.type == 'dirs') {
+			var dirs = msg.dirs;
+			var status   = Misc.findOne({name:'status'});
+			var settings = Misc.findOne({name:'settings'});
 
-Jobs.register({
-	'scanLib': function() {
+			if (settings.library != status.scannerRunOnLibrary) return;
 
-		Logger("scanLib", "Starting job " + this.document._id);
+			// Delete old watchers
+			Object.keys(Watchers).forEach(directory => {
+				if (Watchers[directory]) Watchers[directory].close();
+				Watchers[directory] = null; delete Watchers[directory];
+			});
 
-		var settings = Misc.findOne({ name: 'settings' });
-		if (!settings.library || AbortScanLibJob) {
-			Logger("scanLib", "Job " + this.document._id + " aborted on startup");
-			this.failure();
-			AbortScanLibJob = false;
-			ScanLibJobId = false;
-			return;
-		}
-		var status = Misc.findOne({ name: 'status' });
+			// Set up new watchers
+			var watchListenerTimeout = false;
+			var watchListener = function(type, filename) {
+				if (watchListenerTimeout) Meteor.clearTimeout(watchListenerTimeout);
+				Logger("state", "Watch event, (re-)scheduling library scan in 5 seconds");
+				watchListenerTimeout = Meteor.setTimeout(StartScanLib, 5000);
+			};
 
-		var initialScan = (status.scannerRunOnLibrary === settings.library) ? false : true;
-		var markAsRead = false;
-		if ( initialScan && settings.initialStatus    == 'read') markAsRead = true;
-		if (!initialScan && settings.subsequentStatus == 'read') markAsRead = true;
-		var imageRx = new RegExp(/\.(jpg|png)$/, 'i');
-
-		Misc.update({ name: 'status' }, { $set : { scannerStatus : 'active' } });
-
-		if (NukeLibraryRequested) {
-			Logger("scanLib", "Job " + this.document._id + " nuking library");
-			Books.remove({});
-			Thumbs.remove({});
-			NukeLibraryRequested = false;
-		}
-
-		var unreadRx = false;
-		if (settings.unreadMatch)
-			unreadRx = new RegExp(RegExp.quote(settings.unreadMatch), 'i');
-
-		var dirs = [];
-		try {
-			var books = ScanDir(settings.library, false, false, dirs);
-			Logger("scanLib", "Job " + this.document._id + " found " + books.length + " books");
-			books.every((book) => {
-
-				var existingBook = Books.findOne({ _id: book._id });
-				if (existingBook) {
-
-					// Reappeared?
-					if (existingBook.missing) {
-						Books.update({ _id: book._id }, { $set : { missing: false }});
-						Logger(book.name, "Reappeared after being missing");
-					}
-					
-					// Internal move?
-					if (existingBook.dir !== book.dir) {
-						Books.update({ _id: book._id }, { $set : { dir: book.dir }});
-						Logger(book.name, "Changed to directory '" + book.dir + "'");
-					}
-
-					return true;
+			Logger("state", "Watching " + dirs.length + " directories");
+			dirs.forEach( dir => {
+				if (!Watchers[settings.library + path.sep + dir]) {
+					Watchers[settings.library + path.sep + dir] = fs.watch(settings.library + path.sep + dir, {}, Meteor.bindEnvironment((type,filename) => { watchListener(type, filename) }));
 				}
-
-				Logger(book.name, "Trying to add as new book, id " + book._id);
-				temp.track();
-				var tmpDir = UnpackSync(settings.library, book);
-				var files = ReaddirSync(tmpDir).filter(file => { return file.match(imageRx) })
-					.sort((a,b) => {
-						if (a.toLowerCase() > b.toLowerCase()) return 1;
-						if (a.toLowerCase() < b.toLowerCase()) return -1;
-						return 0;
-					});
-				if (!files[0]) {
-					Logger(book.name, "Book does not contain any images, aborting");
-					temp.cleanup();
-					return true;
-				}
-				book.numPages = files.length;
-				book.pages = [];
-				files.forEach(file => {
-					var stats = fs.statSync(tmpDir + path.sep + file);
-					book.pages.push({
-						file: file,
-						size: stats.size
-					});
-				});
-				var out;
-				try {
-					out = ExecFileSync(convertBin, [
-						tmpDir + path.sep + files[0],
-						'(',
-						'+clone',
-						'-resize', 'x600',
-						'-write',
-						tmpDir + path.sep + '_stacks-thumb.jpg',
-						')',
-						'-resize', 'x600',
-						'info:'
-					]);
-				} catch(e) { out = '' };
-				var s = out.match(new RegExp(/\s+([0-9]+)x600\s+/ ));
-				if (!s[1]) {
-					Logger(book.name, "Unable to parse convert output, aborting");
-					temp.cleanup();
-					return true;
-				}
-				book.thumbAr = parseFloat(sprintf("%.3f", parseInt(s[1]) / 600));
-
-				var stats = fs.statSync(tmpDir + path.sep + '_stacks-thumb.jpg');
-				if (!stats || !stats.size) {
-					Logger(book.name, "Unable to generate thubnail, aborting");
-					temp.cleanup();
-					return true;
-				}
-				var thumbDataURL = 'data:image/jpeg;base64,'
-					+ fs.readFileSync(tmpDir + path.sep + '_stacks-thumb.jpg', { encoding: 'base64'})
-					.replace((new RegExp(/[\/\+\=]/,'g')), function(s) { return sprintf('%%%02X', s.charCodeAt()) });
-
-				Thumbs.insert({
-					_id: book._id,
-					base64: thumbDataURL
-				});
-
-				temp.cleanup();
-
-				if (unreadRx) book.isRead = book.dir.match(unreadRx) ? false : true;
-				else book.isRead = markAsRead;
-
-				//Logger("scanLib", "new book", book);
-				Books.insert(book);
-				Logger(book.name, "Successfully added as new book with ID " + book._id);
-
-				return AbortScanLibJob ? false : true;
 			});
 		}
-		catch(e) {
-			// Something segged
-			Logger("scanLib","Exception during job", e);
-			AbortScanLibJob = true;
+	}));
+
+	ScannerProcess.send({
+		type: 'start',
+		cfg: {
+			rarBin: rarBin,
+			zipBin: zipBin,
+			convertBin: convertBin,
+			nukeLib: NukeLibraryRequested
 		}
-
-		if (AbortScanLibJob) {
-			Logger("scanLib", "Job aborted");
-			this.failure();
-		}
-		else {
-			// Mark missing books as missing
-			Books.update({ _id: { $nin: books.map(book => book._id) } }, { $set: { missing: true } }, {multi:true});
-			LibrarySubDirs = dirs;
-			this.success();
-
-			Misc.update({ name: 'status' }, { $set : { scannerRunOnLibrary: settings.library } });
-		}
-
-		Misc.update({ name: 'status' }, { $set : { scannerStatus : false } });
-		AbortScanLibJob = false;
-		ScanLibJobId = false;
-	}
-});
-
+	});
+	NukeLibraryRequested = false;
+};
 
 Meteor.startup(() => {
 	Logger("startup", "Stacks server starting");
 
-	Jobs.clear('*');
 	Misc.update({ name:'settings' }, { $set : { fullRescan : false } });
 	Misc.update({ name:'status' }, { $set : { scannerStatus : false } });
 
@@ -439,41 +243,6 @@ Meteor.startup(() => {
 			}
 
 			if (NukeLibraryRequested || fields.library) StartScanLib();
-		}
-	});
-
-	Misc.find({ name: 'status' }).observeChanges({
-		changed(id, fields) {
-			if (fields.scannerStatus === false) {
-				// Scanner exited
-				Logger("state", "Scanner exited");
-				var status   = Misc.findOne({name:'status'});
-				var settings = Misc.findOne({name:'settings'});
-				if (settings.library === status.scannerRunOnLibrary) {
-					
-					// Delete old watchers
-					Object.keys(Watchers).forEach(directory => {
-						if (Watchers[directory]) Watchers[directory].close();
-						Watchers[directory] = null; delete Watchers[directory];
-					});
-
-					// Set up new watchers
-					var watchListenerTimeout = false;
-					var watchListener = function(type, filename) {
-						if (watchListenerTimeout) Meteor.clearTimeout(watchListenerTimeout);
-						Logger("state", "Watch event, (re-)scheduling library scan in 5 seconds");
-						watchListenerTimeout = Meteor.setTimeout(StartScanLib, 5000);
-					};
-
-					Logger("state", "Watching " + LibrarySubDirs.length + " directories");
-					LibrarySubDirs.forEach( dir => {
-						if (!Watchers[settings.library + path.sep + dir]) {
-							Watchers[settings.library + path.sep + dir] = fs.watch(settings.library + path.sep + dir, {}, Meteor.bindEnvironment((type,filename) => { watchListener(type, filename) }));
-						}
-					});
-
-				}
-			}
 		}
 	});
 

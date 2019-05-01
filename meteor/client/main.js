@@ -60,7 +60,7 @@ PageJq = false;
 Thumbs = new ReactiveDict('thumbs');
 ThumbsLoading = {};
 LoadThumb = function(bookId) {
-    
+
     if (!ThumbsLoading[bookId]) {
         ThumbsLoading[bookId] = true;
         LocalForage.getItem(bookId, function(err, dataUrl) {
@@ -135,7 +135,7 @@ Template.layers.helpers({
         switch (layer) {
             // Always on top
             case 'controls':
-                style['z-index'] = 999; 
+                style['z-index'] = 999;
             break;
             // Hide right scrollbar
             case 'settings':
@@ -176,7 +176,7 @@ Template.controls.helpers({
         }
 
         if (controlHit == control) classes.push('hinted');
-        
+
         Meteor.setTimeout(function() { ControlHit.set(false); HintActive.set(false) }, 300);
 
         return classes.join(' ');
@@ -261,7 +261,7 @@ Template.stacks.helpers({
     stacks: function() {
         var stackMap = {};
         Books.find({ missing: false }).forEach(book => {
-            
+
             if (!stackMap[book.stackId])
                 stackMap[book.stackId] = {
                     id  : book.stackId,
@@ -338,12 +338,12 @@ Template.stacks.helpers({
         var height = Math.floor((this.stackHeight - this.stackIdx) * 1.5);
         var blur = Math.floor(this.stackHeight * 1.5);
         return this.noStackCover ?
-        { style: 'transform: translate(calc(-50% + '+((this.stackIdx*1)-2)+'px), calc(-50% + '+((this.stackIdx*1)-2)+'px)) rotate(' + (2 * 10) + 'deg);' + 
-            'width:' + (65 * this.noStackCover) + '%;' + 
+        { style: 'transform: translate(calc(-50% + '+((this.stackIdx*1)-2)+'px), calc(-50% + '+((this.stackIdx*1)-2)+'px)) rotate(' + (2 * 10) + 'deg);' +
+            'width:' + (65 * this.noStackCover) + '%;' +
             'z-index: ' + (100 - this.stackIdx) + ';' }
         :
-        { style: 'transform: translate(-50%, -50%) rotate(' + (this.stackIdx * 10) + 'deg);' + 
-                'width:' + (65 * this.thumbAr) + '%;' + 
+        { style: 'transform: translate(-50%, -50%) rotate(' + (this.stackIdx * 10) + 'deg);' +
+                'width:' + (65 * this.thumbAr) + '%;' +
                 'z-index: ' + (100 - this.stackIdx) + ';' +
                 'box-shadow: ' + height + 'px ' + height + 'px ' + blur + 'px ' + height + 'px rgba(0,0,0,0.2)'
         };
@@ -418,7 +418,7 @@ Template.books.helpers({
         if (activePage && activePage > (maxPage * 2/3)) return '';
 
         if (activePage) return 'status-started';
-        
+
         return 'status-unread';
     },
 
@@ -542,7 +542,7 @@ Template.body.events({
                 $('.control#prev').click();
             break;
         }
-        
+
         //HintActive.set(true);
         return false;
     },
@@ -625,7 +625,7 @@ Meteor.startup(function() {
 
         ScrollbarWidth.set($('#viewer').get(0).offsetWidth  - $('#viewer').get(0).clientWidth);
         ScrollbarHeight.set($('#viewer').get(0).offsetHeight - $('#viewer').get(0).clientHeight);
-        
+
         $('#viewer').addClass('fit');
 
         $( window ).resize(function() {
@@ -642,7 +642,7 @@ Meteor.startup(function() {
 
         var message = Message.get();
         var status = Misc.findOne({ name: 'status' });
-        
+
         if (status.scannerStatus) {
             $('#message').text("Scanner active").addClass('open');
             return;
@@ -669,7 +669,7 @@ Meteor.startup(function() {
                 page.img = null;
             });
         }
-        
+
         var activeBookId = ActiveBookId.get();
 
         var activeBook = Tracker.nonreactive(function() { return Books.findOne({ _id: activeBookId }) });
@@ -705,7 +705,7 @@ Meteor.startup(function() {
                 }
             }
             Pages[nextPage].loading = true;
-            Pages[nextPage].img.xhrLoad('/page/' + activeBook._id + '/' + nextPage, function(done, loadedBytes) {
+            Pages[nextPage].img.xhrLoad('page/' + activeBook._id + '/' + nextPage, function(done, loadedBytes) {
                 if (done) {
                     Pages[nextPage].loaded = true;
                     // Load next page
