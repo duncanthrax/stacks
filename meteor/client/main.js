@@ -3,8 +3,6 @@ import { ReactiveVar } from 'meteor/reactive-var';
 
 import './main.html';
 
-Router.options.autoStart = false;
-
 LocalForage = require('localforage');
 
 SessionAmplify = Object.create(Session);
@@ -255,12 +253,14 @@ Template.controls.events({
     }
 });
 
-
 Template.stacks.helpers({
 
     stacks: function() {
         var stackMap = {};
-        Books.find({ missing: false }).forEach(book => {
+
+        var activeLayer = ActiveLayer.get();
+
+        Books.find({ missing: false }, { reactive: (activeLayer == 'stacks') }).forEach(book => {
 
             if (!stackMap[book.stackId])
                 stackMap[book.stackId] = {
@@ -282,7 +282,6 @@ Template.stacks.helpers({
             stackMap[book.stackId].hasUnread++;
 
             if (mtime > (Date.now() - (1000 * 14 * 86400))) stackMap[book.stackId].hasNew++;
-
         });
 
         return Object.values(stackMap).sort((a, b) => {
@@ -391,12 +390,15 @@ Template.books.created = function() {
   this.menuOpenBookId = new ReactiveVar(false);
 };
 
+
 Template.books.helpers({
 
     books: function() {
+        var activeLayer = ActiveLayer.get();
+
         return Books.find(
             { missing: false, stackId: ActiveStack.get().id },
-            { sort: [['order', 'asc']] }
+            { sort: [['order', 'asc']], reactive: (activeLayer == 'books') }
         ).fetch().map((book,idx,all) => {
             return book;
         });

@@ -1,24 +1,25 @@
 import { Meteor } from 'meteor/meteor';
 import { EJSON } from 'meteor/ejson';
 
-var fs = require('fs');
-var path = require('path');
-var temp = require('temp');
-var child_process = require('child_process');
+const url  = require('url');
+const fs   = require('fs');
+const path = require('path');
+const temp = require('temp');
+const child_process = require('child_process');
 
 RegExp.quote = function(str) {
 	return (str+'').replace(/[.?*+^$[\]\\(){}|-]/g, "\\$&");
 };
 
-// Default paths on Linux
-var rarBin = '/usr/bin/unrar';
-var zipBin = '/usr/bin/unzip';
-var convertBin = '/usr/bin/convert';
-
+// Default paths
+const bins = {};
+bins.unrar = '/usr/bin/unrar';
+bins.unzip = '/usr/bin/unzip';
+bins.convert = '/usr/bin/convert';
 if (process.platform === 'win32') {
-	rarBin = Assets.absoluteFilePath('windows/unrar.exe');
-	zipBin = Assets.absoluteFilePath('windows/unzip.exe');
-	convertBin = Assets.absoluteFilePath('windows/convert.exe');
+	bins.unrar = Assets.absoluteFilePath('windows/unrar.exe');
+	bins.unzip = Assets.absoluteFilePath('windows/unzip.exe');
+	bins.convert = Assets.absoluteFilePath('windows/convert.exe');
 }
 
 Books = new Mongo.Collection('books');
@@ -45,27 +46,27 @@ UnpackSync = function(library, book) {
 	// Alway try both rar/zip but start with the more likely one.
 	if (book.type == 'cbr') {
 		try {
-			ExecFileSync(rarBin, ['e', '-o+', '-y', '-p-', '-inul', library + path.sep + book.dir + path.sep + book.file, tmpDir]);
+			ExecFileSync(bins.unrar, ['e', '-o+', '-y', '-p-', '-inul', library + path.sep + book.dir + path.sep + book.file, tmpDir]);
 		} catch (code) {
-			Logger(book.name, rarBin + " returned exit code " + code + ", trying ZIP");
+			Logger(book.name, `${bins.unrar} returned exit code ${code}, trying ZIP`);
 			try {
-				ExecFileSync(zipBin, ['-o', '-j', '-qq', library + path.sep + book.dir + path.sep + book.file, '-d', tmpDir]);
+				ExecFileSync(bins.unzip, ['-o', '-j', '-qq', library + path.sep + book.dir + path.sep + book.file, '-d', tmpDir]);
 			}
 			catch(e) {
-				Logger(book.name, zipBin + " returned exit code " + code);
+				Logger(book.name, `${bins.unzip} returned exit code ${code}`);
 			};
 		}
 	}
 	else if (book.type == 'cbz') {
 		try {
-			ExecFileSync(zipBin, ['-o', '-j', '-qq', library + path.sep + book.dir + path.sep + book.file, '-d', tmpDir]);
+			ExecFileSync(bins.unzip, ['-o', '-j', '-qq', library + path.sep + book.dir + path.sep + book.file, '-d', tmpDir]);
 		} catch (code) {
-			Logger(book.name, zipBin + " returned exit code " + code + ", trying RAR");
+			Logger(book.name, `${bins.unzip} returned exit code ${code}, trying RAR`);
 			try {
-				ExecFileSync(rarBin, ['e', '-o+', '-y', '-p-', '-inul', library + path.sep + book.dir + path.sep + book.file, tmpDir]);
+				ExecFileSync(bins.unrar, ['e', '-o+', '-y', '-p-', '-inul', library + path.sep + book.dir + path.sep + book.file, tmpDir]);
 			}
 			catch(e) {
-				Logger(book.name, rarBin + " returned exit code " + code);
+				Logger(book.name, `${bins.unrar} returned exit code ${code}`);
 			};
 		}
 	}
@@ -73,16 +74,15 @@ UnpackSync = function(library, book) {
 	return tmpDir;
 };
 
-Router.route('page', {
-	name: 'page',
-	path: /page\/(.+?)\/(.+?)$/,
-	where: 'server',
-	action: function() {
+WebApp.connectHandlers.use(function(req, response, next) {
+	var thisURL = url.parse(req.url);
+	var m = thisURL.pathname.match(/page\/(.+?)\/(.+?)$/);
+
+	if (m && m[1] && m[2]) {
 
 		var fourOfour = () => {
-			this.response.writeHead(404);
-			this.response.end('404 not found');
-			return true;
+			response.writeHead(404);
+			return response.end('404 not found');
 		};
 
 		var readPage = (unpackPath, page) => {
@@ -99,10 +99,10 @@ Router.route('page', {
 
 		var settings = Misc.findOne({ name: 'settings' });
 
-		var pageNum = parseInt(this.params[1]);
+		var pageNum = parseInt(m[2]);
 		if (pageNum == NaN) return fourOfour();
 
-		var book = Books.findOne({ _id: this.params[0] });
+		var book = Books.findOne({ _id: m[1] });
 		if (!book) return fourOfour();
 
 		var page = book.pages[pageNum];
@@ -111,27 +111,30 @@ Router.route('page', {
 		var data = null;
 		if (UnpackPaths[book._id]) data = readPage(UnpackPaths[book._id], page);
 		if (data) {
-			Logger(book.name, "Download request for page " + pageNum + ", already unpacked");
+			Logger(book.name, `Download request for page ${pageNum}, already unpacked`);
 		}
 		else {
-			Logger(book.name, "Download request for page " + pageNum + ", unpacking");
+			Logger(book.name, `Download request for page ${pageNum}, unpacking`);
 			UnpackPaths[book._id] = UnpackSync(settings.library, book);
-			Logger(book.name, "Unpacked at " + UnpackPaths[book._id]);
+			Logger(book.name, `Unpacked at ${UnpackPaths[book._id]}`);
 			data = readPage(UnpackPaths[book._id], page);
 		}
 
 		if (!data) {
-			Logger(book.name, "Unable to read image data for page " + pageNum);
+			Logger(book.name, `Unable to read image data for page ${pageNum}`);
 			return fourOfour();
 		}
 
+		// Delete page after download, we will hopefully not need it again soon.
 		fs.unlinkSync(UnpackPaths[book._id] + path.sep + page.file);
 
-		this.response.writeHead(200, { 'Content-Type': 'image' });
-		this.response.write(data);
-		this.response.end();
+		response.writeHead(200, { 'content-Type': 'image' });
+		response.write(data);
+		return response.end();
 	}
+	else next();
 });
+
 
 ScannerProcess = false;
 Watchers = {};
@@ -184,9 +187,9 @@ StartScanLib = function() {
 	ScannerProcess.send({
 		type: 'start',
 		cfg: {
-			rarBin: rarBin,
-			zipBin: zipBin,
-			convertBin: convertBin,
+			rarBin: bins.unrar,
+			zipBin: bins.unzip,
+			convertBin: bins.convert,
 			nukeLib: NukeLibraryRequested
 		}
 	});
@@ -195,6 +198,20 @@ StartScanLib = function() {
 
 Meteor.startup(() => {
 	Logger("startup", "Stacks server starting");
+
+	[Books, Thumbs, Misc].forEach(c => {
+		c.allow({
+			insert(userId, doc) {
+				return true;
+			},
+			update(userId, doc, fields, modifier) {
+				return true;
+			},
+			remove(userId, doc) {
+				return true;
+			}
+		});
+	});
 
 	Misc.update({ name:'settings' }, { $set : { fullRescan : false } });
 	Misc.update({ name:'status' }, { $set : { scannerStatus : false } });
