@@ -48,6 +48,8 @@ ViewMode       = new ReactiveVar('fit');
 Message        = new ReactiveVar(false);
 RenderOk       = new ReactiveVar(false);
 RenderDone     = new ReactiveVar(false);
+RenderBooks    = new ReactiveVar(0);
+RenderStacks   = new ReactiveVar(0);
 
 ViewerScrollDir = 'down';
 
@@ -253,22 +255,38 @@ Template.controls.events({
     }
 });
 
+
+StacksBooks = [];
+Template.stacks.onRendered(function() {
+    var self = Template.instance();
+
+    this.autorun(function() {
+        var activeLayer = ActiveLayer.get();
+        if (activeLayer != 'stacks') return;
+        StacksBooks = Books.find({ missing: false }).fetch();
+        RenderStacks.set(Date.now());
+    });
+});
+
 Template.stacks.helpers({
 
     stacks: function() {
         var stackMap = {};
 
-        var activeLayer = ActiveLayer.get();
+        RenderStacks.get();
 
-        Books.find({ missing: false }, { reactive: (activeLayer == 'stacks') }).forEach(book => {
+        StacksBooks.forEach(book => {
 
             if (!stackMap[book.stackId])
                 stackMap[book.stackId] = {
                     id  : book.stackId,
                     name: book.stackName,
                     hasUnread: 0,
-                    hasNew: 0
+                    hasNew: 0,
+                    booksByOrder: {}
                 };
+
+            stackMap[book.stackId].booksByOrder[book.order] = book;
 
             if (book.isRead) return;
 
@@ -307,12 +325,9 @@ Template.stacks.helpers({
         return false;
     },
 
-    stackBooks: function(stackId) {
-        var lastAr = false;
-        return Books.find(
-            { missing: false, stackId: stackId },
-            { sort: [['order', 'asc']] }
-        ).fetch().slice(0,36).map((book,idx,all) => {
+    stackBooks: function() {
+        return Object.keys(this.booksByOrder).sort().slice(0,36).map((order,idx,all) => {
+            var book = this.booksByOrder[order];
             book.stackIdx = idx;
             book.stackHeight = all.length;
             if (idx >= 3) book.noStackCover = lastAr;
@@ -391,17 +406,23 @@ Template.books.created = function() {
 };
 
 
+BooksBooks = [];
+Template.books.onRendered(function() {
+    var self = Template.instance();
+
+    this.autorun(function() {
+        var activeLayer = ActiveLayer.get();
+        if (activeLayer != 'books') return;
+        BooksBooks = Books.find({ missing: false, stackId: ActiveStack.get().id }, { sort: [['order', 'asc']] }).fetch();
+        RenderBooks.set(Date.now());
+    });
+});
+
 Template.books.helpers({
 
     books: function() {
-        var activeLayer = ActiveLayer.get();
-
-        return Books.find(
-            { missing: false, stackId: ActiveStack.get().id },
-            { sort: [['order', 'asc']], reactive: (activeLayer == 'books') }
-        ).fetch().map((book,idx,all) => {
-            return book;
-        });
+        RenderBooks.get();
+        return BooksBooks;
     },
 
     menuOpen: function() {
@@ -464,6 +485,7 @@ Template.books.helpers({
     }
 
 });
+
 
 Template.viewer.onRendered(function() {
     var self = Template.instance();
@@ -549,37 +571,37 @@ Template.body.events({
         return false;
     },
 
-    'mousewheel, DOMMouseScroll': function(e) {
-        e.preventDefault();
-        var direction = Math.max(-1, Math.min(1, (e.originalEvent.wheelDelta || -e.originalEvent.detail))) * -1;
-        var activeLayer = ActiveLayer.get();
+    // 'mousewheel, DOMMouseScroll': function(e) {
+    //     e.preventDefault();
+    //     var direction = Math.max(-1, Math.min(1, (e.originalEvent.wheelDelta || -e.originalEvent.detail))) * -1;
+    //     var activeLayer = ActiveLayer.get();
 
-        // Viewer gets special treatment
-        if (activeLayer == 'viewer') {
-            if (ViewerScrollDir == 'down') {
-                var scrollInc = Math.ceil(ViewportHeight.get() / 10);
-                var curPos = $('.layer#viewer').scrollTop();
-                curPos += (scrollInc * direction) ;
-                $('.layer#viewer').scrollTop(curPos);
-            }
-            else {
-                var scrollInc = Math.ceil(ViewportWidth.get() / 10);
-                var curPos = $('.layer#viewer').scrollLeft();
-                curPos += (scrollInc * direction) ;
-                $('.layer#viewer').scrollLeft(curPos);
-            }
-            return false;
-        }
+    //     // Viewer gets special treatment
+    //     if (activeLayer == 'viewer') {
+    //         if (ViewerScrollDir == 'down') {
+    //             var scrollInc = Math.ceil(ViewportHeight.get() / 10);
+    //             var curPos = $('.layer#viewer').scrollTop();
+    //             curPos += (scrollInc * direction) ;
+    //             $('.layer#viewer').scrollTop(curPos);
+    //         }
+    //         else {
+    //             var scrollInc = Math.ceil(ViewportWidth.get() / 10);
+    //             var curPos = $('.layer#viewer').scrollLeft();
+    //             curPos += (scrollInc * direction) ;
+    //             $('.layer#viewer').scrollLeft(curPos);
+    //         }
+    //         return false;
+    //     }
 
-        // Other layers
-        var scrollInc = 100;
-        if (activeLayer == 'books')  scrollInc = Math.floor(ViewportWidth.get() / NumBookColumns.get() / 2);
-        if (activeLayer == 'stacks') scrollInc = Math.floor(ViewportWidth.get() / NumStackColumns.get() / 3);
-        var top = $('.layer#'+activeLayer).scrollTop();
-        top += (scrollInc * direction);
-        $('.layer#'+activeLayer).scrollTop(top);
-        return false;
-    }
+    //     // Other layers
+    //     var scrollInc = 100;
+    //     if (activeLayer == 'books')  scrollInc = Math.floor(ViewportWidth.get() / NumBookColumns.get() / 2);
+    //     if (activeLayer == 'stacks') scrollInc = Math.floor(ViewportWidth.get() / NumStackColumns.get() / 3);
+    //     var top = $('.layer#'+activeLayer).scrollTop();
+    //     top += (scrollInc * direction);
+    //     $('.layer#'+activeLayer).scrollTop(top);
+    //     return false;
+    // }
 
 });
 
