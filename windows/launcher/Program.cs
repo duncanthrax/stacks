@@ -48,7 +48,7 @@ namespace StacksLauncher
             // Wait for TCP connectivity ...
             TcpClient mongoClient = new TcpClient();
             int retries = 10;
-            do { mongoClient.Connect("127.0.0.1", 24472); Thread.Sleep(1000); retries--; } while (retries > 0 && !mongoClient.Connected);
+            do { Thread.Sleep(1000); mongoClient.Connect("127.0.0.1", 24472); retries--; } while (retries > 0 && !mongoClient.Connected);
             if (!mongoClient.Connected)
             {
                 mongo.Kill();
@@ -66,7 +66,7 @@ namespace StacksLauncher
             {
                 TcpClient meteorClient = new TcpClient();
                 retries = 10;
-                do { meteorClient.Connect("127.0.0.1", 4472); Thread.Sleep(1000); retries--; } while (retries > 0 && !meteorClient.Connected);
+                do { Thread.Sleep(1000); meteorClient.Connect("127.0.0.1", 4472); retries--; } while (retries > 0 && !meteorClient.Connected);
                 if (!meteorClient.Connected)
                 {
                     mongo.Kill();
@@ -127,7 +127,7 @@ namespace StacksLauncher
             startInfo.FileName = "node.exe";
             startInfo.WorkingDirectory = "meteor";
             startInfo.WindowStyle = ProcessWindowStyle.Hidden;
-            startInfo.EnvironmentVariables["MONGO_URL"] = "mongodb://127.0.0.1:24472";
+            startInfo.EnvironmentVariables["MONGO_URL"] = "mongodb://127.0.0.1:24472/meteor";
             startInfo.EnvironmentVariables["ROOT_URL"] = "http://127.0.0.1:4472";
             startInfo.EnvironmentVariables["PORT"] = "4472";
             startInfo.Arguments = "main.js --scripts-prepend-node-path";
