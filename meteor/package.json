@@ -6,7 +6,8 @@
     "visualize": "meteor --production --extra-packages bundle-visualizer"
   },
   "dependencies": {
-    "@babel/runtime": "^7.4.4",
+    "@babel/runtime": "^7.15.4",
+    "babel-runtime": "^6.26.0",
     "child_process": "^1.0.2",
     "localforage": "^1.7.2",
     "meteor-node-stubs": "^0.4.1",
