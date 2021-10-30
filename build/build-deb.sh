@@ -98,9 +98,9 @@ echo ":: Building DEB package"
 sudo chown -R 0:0 $PACKAGE_NAME
 dpkg-deb --no-uniform-compression --build $PACKAGE_NAME
 
-if [ -r "$PACKAGE_NAME.deb" ]; then
-	echo ":: Uploading to bintray"
-	RES=$(curl -T $PACKAGE_NAME.deb -uduncanthrax:$BINTRAY_API_KEY "https://api.bintray.com/content/duncanthrax/deb/stacks/release/pool/s/stacks/"$PACKAGE_NAME".deb;deb_distribution=systemd;deb_component=main;deb_architecture=amd64;publish=1")
-	echo $RES
-	echo
-fi
+#if [ -r "$PACKAGE_NAME.deb" ]; then
+#	echo ":: Uploading to bintray"
+#	RES=$(curl -T $PACKAGE_NAME.deb -uduncanthrax:$BINTRAY_API_KEY "https://api.bintray.com/content/duncanthrax/deb/stacks/release/pool/s/stacks/"$PACKAGE_NAME".deb;deb_distribution=systemd;deb_component=main;deb_architecture=amd64;publish=1")
+#	echo $RES
+#	echo
+#fi
